@@ -113,7 +113,9 @@ export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
         audioUrl={audioUrl}
         segments={segments}
         activeIdx={activeIdx}
+        editable
         onRegionClick={focusSegment}
+        onRegionResize={(i, s, e) => resizeSegment(i, s, e)}
       />
 
       <div className="grid grid-cols-12 gap-4 mt-4">
@@ -135,19 +137,7 @@ export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
               index={activeIdx}
               total={segments.length}
               speakerOptions={speakerOptions}
-              onChange={(p) => {
-                // 時間欄位走 resizeSegment 走 clamp（防止與鄰段重疊）
-                if (p.start_time !== undefined || p.end_time !== undefined) {
-                  const cur = segments[activeIdx];
-                  resizeSegment(
-                    activeIdx,
-                    p.start_time ?? cur.start_time,
-                    p.end_time ?? cur.end_time,
-                  );
-                } else {
-                  patchSegment(activeIdx, p);
-                }
-              }}
+              onChange={(p) => patchSegment(activeIdx, p)}
             />
           )}
         </div>
