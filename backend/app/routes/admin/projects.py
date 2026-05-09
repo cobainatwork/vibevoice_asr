@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import Literal
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, File, Form, UploadFile
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -123,7 +124,59 @@ async def export_hotwords(
     )
 
 
+@router.post("/projects/{project_id}/hotwords/import")
+async def import_hotwords(
+    project_id: int,
+    file: UploadFile = File(...),
+    mode: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """匯入 hotwords。Mode：append（與現有 list 取聯集，保留順序）/ replace（整批換）。"""
+    if mode not in ("append", "replace"):
+        raise http_error(
+            ErrorCode.INVALID_PROJECT,
+            f"mode must be 'append' or 'replace', got {mode!r}",
+        )
+    project = await _get_or_404(db, project_id)
+    contents = await file.read()
+    if len(contents) > 1024 * 1024:
+        raise http_error(
+            ErrorCode.UPLOAD_TOO_LARGE,
+            f"hotwords import upload {len(contents)} bytes exceeds 1 MB limit",
+        )
+    new_words = _parse_hotwords_txt(contents)
+
+    existing = list(project.hotwords or [])
+    if mode == "replace":
+        merged = new_words
+        added = len(new_words)
+        replaced = len(existing)
+        skipped = 0
+    else:  # append
+        seen = set(existing)
+        added_words = [w for w in new_words if w not in seen]
+        skipped = len(new_words) - len(added_words)
+        merged = existing + added_words
+        added = len(added_words)
+        replaced = 0
+
+    project.hotwords = merged
+    await db.flush()
+    return {
+        "hotwords": merged,
+        "added": added,
+        "replaced": replaced,
+        "skipped_duplicates": skipped,
+    }
+
+
 # === Helpers ===
+
+
+def _parse_hotwords_txt(contents: bytes) -> list[str]:
+    """Decode UTF-8、splitlines、trim、過濾空行。"""
+    text = contents.decode("utf-8", errors="replace")
+    return [line.strip() for line in text.splitlines() if line.strip()]
 
 
 async def _get_or_404(db: AsyncSession, project_id: int) -> Project:
