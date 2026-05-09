@@ -52,6 +52,9 @@ build/
 # Claude Code local settings (per-machine, do not commit)
 .claude/
 
+# Superpowers brainstorming session（mockups、events，per-machine）
+.superpowers/
+
 # Vendor (upstream clone)
 # Default: NOT ignored — keep self-contained repo (≈ 272 MB)
 # To exclude (smaller repo, requires internet on first setup): uncomment below
