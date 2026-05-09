@@ -4,8 +4,13 @@ from_import / from_job 留 Task 8 / 9。
 """
 from __future__ import annotations
 
+import io
+import wave
+
 import pytest
 import pytest_asyncio
+from fastapi import UploadFile
+from openpyxl import Workbook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError, ErrorCode
@@ -93,12 +98,6 @@ async def test_delete_item_idempotent(db_session):
 # ============================================================
 # create_from_import — Task 8
 # ============================================================
-
-import io
-import wave
-
-from fastapi import UploadFile
-from openpyxl import Workbook
 
 
 def _make_wav_bytes(duration_sec: float = 1.0) -> bytes:
