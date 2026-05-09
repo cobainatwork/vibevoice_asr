@@ -68,3 +68,27 @@ async def app_client() -> AsyncIterator:
         await test_engine.dispose()
         db_module.engine = original_engine
         db_module.SessionLocal = original_sessionlocal
+
+
+@pytest_asyncio.fixture
+async def db_session():
+    """獨立 in-memory test engine，給 service 層 unit test 用（Task 7+）。
+
+    與 app_client 不共用：service 層測試不經 app routes，直接拿 AsyncSession
+    呼叫 service 函式。每個 test 一個 in-memory sqlite engine，結束 dispose。
+    """
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
+
+    from app.db import Base
+
+    eng = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = async_sessionmaker(eng, class_=AsyncSession, expire_on_commit=False)
+    async with sm() as s:
+        yield s
+    await eng.dispose()
