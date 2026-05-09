@@ -48,16 +48,16 @@ export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
   }, [segments]);
 
   const save = async () => {
-    if (saving) return;
-    if (!dirty) return;
-    // 凍結當下 frontend segments 當 snapshot；不依賴 backend 回的內容
-    // （backend round-trip 可能因 dict key order / 浮點精度差異使 JSON.stringify
-    // 不一致，導致 dirty 永遠 true）
-    const localSnapshot = segments;
+    // 用 getState() 取最新值；setTimeout 觸發時 closure 中的 segments / dirty
+    // 可能是 stale（使用者持續編輯期間值已變動）
+    const state = useEditorStore.getState();
+    if (state.saving) return;
+    if (!state.isDirty()) return;
+    const latestSegments = state.segments;
     setSaving(true);
     try {
-      await jobsApi.patchSegments(job.id, localSnapshot);
-      markSaved(localSnapshot);
+      await jobsApi.patchSegments(job.id, latestSegments);
+      markSaved(latestSegments);
     } catch {
       // client.ts 已 toast
       setSaving(false);
