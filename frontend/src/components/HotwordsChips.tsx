@@ -1,68 +1,52 @@
-/**
- * Reusable chip-based string list editor.
- *
- * Used by:
- * - Hotwords page
- * - Editor.tsx (for customized_context per-sample)
- */
+import { X } from "lucide-react";
 import { useState } from "react";
-import { XIcon } from "lucide-react";
 
 interface Props {
   value: string[];
   onChange: (next: string[]) => void;
-  placeholder?: string;
-  disabled?: boolean;
 }
 
-export function HotwordsChips({ value, onChange, placeholder = "新增...", disabled }: Props) {
-  const [input, setInput] = useState("");
+export function HotwordsChips({ value, onChange }: Props) {
+  const [draft, setDraft] = useState("");
 
-  const add = () => {
-    const v = input.trim();
-    if (!v) return;
-    if (value.includes(v)) {
-      setInput("");
-      return;
-    }
-    onChange([...value, v]);
-    setInput("");
+  const commit = () => {
+    const tokens = draft.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+    if (tokens.length === 0) return;
+    const next = [...value];
+    for (const t of tokens) if (!next.includes(t)) next.push(t);
+    onChange(next);
+    setDraft("");
   };
 
-  const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
+  const remove = (i: number) => {
+    const next = [...value];
+    next.splice(i, 1);
+    onChange(next);
+  };
 
   return (
-    <div className="flex flex-wrap gap-2 items-center p-2 border border-gray-300 rounded bg-white min-h-[3rem]">
-      {value.map((v, i) => (
-        <span
-          key={`${v}-${i}`}
-          className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded text-sm"
-        >
-          {v}
-          {!disabled && (
-            <button onClick={() => remove(i)} className="hover:text-blue-900">
-              <XIcon size={12} />
-            </button>
-          )}
+    <div className="flex flex-wrap gap-2 p-3 border border-slate-300 rounded-md bg-white min-h-[3rem] focus-within:ring-2 focus-within:ring-blue-500">
+      {value.map((w, i) => (
+        <span key={`${w}-${i}`} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-900 text-sm rounded">
+          {w}
+          <button type="button" aria-label={`刪除 ${w}`} onClick={() => remove(i)} className="cursor-pointer text-blue-600 hover:text-blue-900 transition-colors duration-200"><X className="w-3 h-3" /></button>
         </span>
       ))}
-      {!disabled && (
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === ",") {
-              e.preventDefault();
-              add();
-            } else if (e.key === "Backspace" && !input && value.length) {
-              remove(value.length - 1);
-            }
-          }}
-          onBlur={add}
-          placeholder={placeholder}
-          className="flex-1 min-w-[6rem] outline-none text-sm"
-        />
-      )}
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Backspace" && draft === "" && value.length > 0) {
+            remove(value.length - 1);
+          }
+        }}
+        onBlur={commit}
+        placeholder={value.length === 0 ? "輸入 hotwords，Enter 或逗號分隔..." : "+ 新增"}
+        className="flex-1 min-w-[8rem] outline-none text-sm bg-transparent"
+      />
     </div>
   );
 }
