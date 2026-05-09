@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import DATASET_EXPORT_FORMATS, DATASET_TEMPLATE_FORMATS
 from app.db import get_db
 from app.errors import AppError, ErrorCode, http_error
 from app.schemas import DatasetFromJobIn, DatasetItemOut, DatasetItemPatch
@@ -20,9 +21,6 @@ from app.services import dataset_exporter, dataset_service
 from app.services.file_store import get_store
 
 router = APIRouter()
-
-_TEMPLATE_FORMATS = {"json", "xlsx", "srt", "txt"}
-_EXPORT_FORMATS = {"json", "srt", "xlsx"}
 
 
 @router.get("/datasets", response_model=list[DatasetItemOut])
@@ -33,10 +31,10 @@ async def list_datasets(project_id: int, db: AsyncSession = Depends(get_db)):
 @router.get("/datasets/templates/{format}")
 async def download_template(format: str):
     """Serve a pre-built template file from backend/templates/."""
-    if format not in _TEMPLATE_FORMATS:
+    if format not in DATASET_TEMPLATE_FORMATS:
         raise http_error(
             ErrorCode.UNSUPPORTED_FORMAT,
-            f"Template format must be one of {sorted(_TEMPLATE_FORMATS)}",
+            f"Template format must be one of {list(DATASET_TEMPLATE_FORMATS)}",
         )
     path = Path("templates") / f"dataset_template.{format}"
     if not path.exists():
@@ -129,10 +127,10 @@ async def export_dataset(
     format: str = "json",
     db: AsyncSession = Depends(get_db),
 ):
-    if format not in _EXPORT_FORMATS:
+    if format not in DATASET_EXPORT_FORMATS:
         raise http_error(
             ErrorCode.UNSUPPORTED_FORMAT,
-            f"Export format must be one of {sorted(_EXPORT_FORMATS)}",
+            f"Export format must be one of {list(DATASET_EXPORT_FORMATS)}",
         )
     try:
         item = await dataset_service.get_item(db, item_id)

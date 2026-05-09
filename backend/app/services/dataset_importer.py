@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from app.constants import DATASET_LABEL_FORMATS
 from app.errors import AppError, ErrorCode
 
 logger = logging.getLogger(__name__)
@@ -206,10 +207,10 @@ def import_label(
     project_hotwords: list[str],
 ) -> dict:
     """Top-level: parse → validate → return canonical training JSON dict."""
-    if format not in {"json", "xlsx", "srt", "txt"}:
+    if format not in DATASET_LABEL_FORMATS:
         raise AppError(
             ErrorCode.UNSUPPORTED_FORMAT,
-            "Format must be one of [json, xlsx, srt, txt]",
+            f"Format must be one of {list(DATASET_LABEL_FORMATS)}",
         )
     if format == "txt":
         segments = parse_txt(label_path, audio_duration=audio_duration)

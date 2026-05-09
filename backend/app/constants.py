@@ -132,6 +132,17 @@ WEBHOOK_RETRY_DELAYS_SEC = [30, 300, 1800, 7200, 21600, 43200]  # 7 attempts tot
 
 
 # ============================================================
+# Dataset format catalogs (M3.5)
+# ============================================================
+# 匯入：可上傳的標註檔格式（spec §1.2 已排除 csv / vtt）
+# 匯出：可下載的格式（routes/admin/datasets.py 與 dataset_exporter 共用）
+# 範本：可下載的範本檔格式（與 LABEL_FORMATS 相同 — 範本與匯入是雙向對稱）
+DATASET_LABEL_FORMATS: tuple[str, ...] = ("json", "xlsx", "srt", "txt")
+DATASET_EXPORT_FORMATS: tuple[str, ...] = ("json", "srt", "xlsx")
+DATASET_TEMPLATE_FORMATS: tuple[str, ...] = DATASET_LABEL_FORMATS
+
+
+# ============================================================
 # Speaker indexing convention
 # ============================================================
 # Inference output:  "1", "2", ... (1-indexed, str)

@@ -17,6 +17,7 @@ from mutagen import File as MutagenFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import DATASET_LABEL_FORMATS
 from app.errors import AppError, ErrorCode
 from app.models import DatasetItem, DatasetSource, Job, JobStatus, Project
 from app.schemas import DatasetItemPatch
@@ -24,9 +25,6 @@ from app.services import dataset_importer
 from app.services.file_store import get_store
 
 logger = logging.getLogger(__name__)
-
-
-SUPPORTED_IMPORT_FORMATS = {"json", "xlsx", "srt", "txt"}
 
 # 對應到既有 models.DatasetSource enum（M2 已建 migration，不動 schema）
 _SOURCE_BY_FORMAT = {
@@ -118,10 +116,10 @@ async def create_from_import(
          - duration / import_label fail（row 未建）→ 清 tempfile
          - move audio fail（row 已建）→ db.delete + store.delete + commit
     """
-    if format not in SUPPORTED_IMPORT_FORMATS:
+    if format not in DATASET_LABEL_FORMATS:
         raise AppError(
             ErrorCode.UNSUPPORTED_FORMAT,
-            f"Format must be one of {sorted(SUPPORTED_IMPORT_FORMATS)}",
+            f"Format must be one of {list(DATASET_LABEL_FORMATS)}",
         )
     project = await db.get(Project, project_id)
     if project is None:
