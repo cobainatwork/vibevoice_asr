@@ -1,18 +1,13 @@
 """Shared pytest fixtures."""
 from __future__ import annotations
 
-import asyncio
-import os
 from pathlib import Path
 
 import pytest
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+# 自訂 event_loop 已被 pytest-asyncio 棄用；asyncio_mode=auto 已內建處理
+# event loop 生命週期，無須在此覆寫。
 
 
 @pytest.fixture(autouse=True)
