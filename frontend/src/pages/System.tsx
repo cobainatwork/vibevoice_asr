@@ -12,13 +12,16 @@ interface PanelState {
   queue: QueueInfo | null;
   loading: boolean;
   lastError: string | null;
+  lastFetchAt: Date | null;
 }
 
 export default function System() {
   const [s, setS] = useState<PanelState>({
     health: null, vllm: null, profile: null, queue: null,
-    loading: false, lastError: null,
+    loading: false, lastError: null, lastFetchAt: null,
   });
+  // 每秒 tick 一次，讓「上次更新 N 秒前」字串自動更新（不重新打 API）
+  const [now, setNow] = useState<Date>(new Date());
 
   const fetchAll = async () => {
     setS((p) => ({ ...p, loading: true }));
@@ -29,7 +32,10 @@ export default function System() {
         systemApi.profile().catch(() => null),
         systemApi.queue().catch(() => null),
       ]);
-      setS({ health: h, vllm: v, profile: p, queue: q, loading: false, lastError: null });
+      setS({
+        health: h, vllm: v, profile: p, queue: q,
+        loading: false, lastError: null, lastFetchAt: new Date(),
+      });
     } catch (e) {
       setS((prev) => ({ ...prev, loading: false, lastError: String(e) }));
     }
@@ -37,9 +43,17 @@ export default function System() {
 
   useEffect(() => {
     fetchAll();
-    const t = setInterval(fetchAll, POLL_MS);
-    return () => clearInterval(t);
+    const tFetch = setInterval(fetchAll, POLL_MS);
+    const tTick = setInterval(() => setNow(new Date()), 1000);
+    return () => { clearInterval(tFetch); clearInterval(tTick); };
   }, []);
+
+  const sinceLast = s.lastFetchAt
+    ? Math.max(0, Math.floor((now.getTime() - s.lastFetchAt.getTime()) / 1000))
+    : null;
+  const nextIn = s.lastFetchAt
+    ? Math.max(0, Math.ceil((POLL_MS - (now.getTime() - s.lastFetchAt.getTime())) / 1000))
+    : null;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-6">
@@ -101,7 +115,20 @@ export default function System() {
           ) : <Loading />}
         </Panel>
       </div>
-      <p className="text-xs text-slate-500 mt-4">每 10 秒自動更新；數值是最後一次成功的回應</p>
+      <p className="text-xs text-slate-500 mt-4 flex items-center gap-2 flex-wrap">
+        <span>每 10 秒自動更新</span>
+        {sinceLast !== null && (
+          <span className="font-mono">· 上次更新 {sinceLast} 秒前</span>
+        )}
+        {nextIn !== null && !s.loading && (
+          <span className="font-mono">· 下次更新 {nextIn} 秒後</span>
+        )}
+        {s.loading && (
+          <span className="inline-flex items-center gap-1 text-blue-600">
+            <RefreshCw className="w-3 h-3 animate-spin" /> 更新中...
+          </span>
+        )}
+      </p>
     </div>
   );
 }
