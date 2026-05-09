@@ -1,7 +1,7 @@
 import { useToastStore } from "../stores/toastStore";
 import type { ApiErrorBody } from "./types";
 
-const BASE_URL = (import.meta as any).env?.VITE_API_BASE ?? "";
+const BASE_URL = import.meta.env.VITE_API_BASE || "";
 
 export class ApiError extends Error {
   constructor(
