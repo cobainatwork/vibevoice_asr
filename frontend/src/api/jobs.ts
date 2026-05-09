@@ -1,17 +1,23 @@
 import { api } from "./client";
-import type { Job } from "./types";
+import type { JobCreatedOut, JobOut, Segment } from "./types";
+
+const ADMIN = "/api/admin";
 
 export const jobsApi = {
-  list: (projectId: number) =>
-    api.get<Job[]>(`/api/admin/jobs?project_id=${projectId}`),
-  get: (id: string) => api.get<Job>(`/api/admin/jobs/${id}`),
-  upload: (projectId: number, file: File) => {
+  list: (opts: { project_id?: number; status?: string; limit?: number; offset?: number } = {}) =>
+    api.get<JobOut[]>(`${ADMIN}/jobs`, { query: opts }),
+  get: (id: string) => api.get<JobOut>(`${ADMIN}/jobs/${id}`),
+  cancel: (id: string) => api.post<JobOut>(`${ADMIN}/jobs/${id}/cancel`),
+  remove: (id: string) => api.del<void>(`${ADMIN}/jobs/${id}`),
+  audioUrl: (id: string) => `${import.meta.env.VITE_API_BASE || ""}${ADMIN}/jobs/${id}/audio`,
+
+  upload: (file: File, projectId: number) => {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("project_id", String(projectId));
-    return api.upload<{ job_id: string }>("/api/admin/transcribe", fd);
+    return api.postForm<JobCreatedOut>(`${ADMIN}/transcribe`, fd);
   },
-  cancel: (id: string) => api.post<Job>(`/api/admin/jobs/${id}/cancel`),
-  delete: (id: string) => api.del(`/api/admin/jobs/${id}`),
-  audioUrl: (id: string) => `/api/admin/jobs/${id}/audio`,
+
+  patchSegments: (id: string, segments: Segment[]) =>
+    api.patch<JobOut>(`${ADMIN}/jobs/${id}/segments`, { segments }),
 };

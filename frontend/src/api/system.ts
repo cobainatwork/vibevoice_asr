@@ -1,9 +1,11 @@
 import { api } from "./client";
+import type { HealthOut, ProfileOut, QueueInfo, VllmStatusOut } from "./types";
+
+const ADMIN = "/api/admin";
 
 export const systemApi = {
-  health: () => api.get("/api/admin/system/health"),
-  vllmStatus: () => api.get("/api/admin/system/vllm_status"),
-  profile: () => api.get("/api/admin/system/profile"),
-  gpu: () => api.get("/api/admin/system/gpu"),
-  queue: () => api.get("/api/admin/system/queue"),
+  health: () => api.get<HealthOut>(`${ADMIN}/system/health`),
+  vllmStatus: () => api.get<VllmStatusOut>(`${ADMIN}/system/vllm_status`),
+  profile: () => api.get<ProfileOut>(`${ADMIN}/system/profile`),
+  queue: () => api.get<QueueInfo>(`${ADMIN}/system/queue`),
 };
