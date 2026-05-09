@@ -136,9 +136,26 @@ def parse_csv(label_path: Path) -> list[dict]:
 
 
 def parse_srt(label_path: Path) -> list[dict]:
-    """Parse SubRip file. Speaker prefix optional ('Speaker N: ...')."""
-    # TODO(M3.5): use pysrt
-    raise NotImplementedError
+    """
+    Parse SubRip file. Speaker prefix optional ('Speaker N: ...' / 'Speaker N：...').
+    無 prefix 時 speaker = 0；有 prefix 時 N - 1 → 0-indexed。
+    """
+    import pysrt
+
+    subs = pysrt.open(str(label_path), encoding="utf-8")
+    out: list[dict] = []
+    for sub in subs:
+        start = sub.start.ordinal / 1000.0
+        end = sub.end.ordinal / 1000.0
+        text = sub.text.strip() if sub.text else ""
+        m = re.match(r"^Speaker\s*(\d+)\s*[:：]\s*(.*)$", text, re.DOTALL)
+        if m:
+            speaker = max(0, int(m.group(1)) - 1)
+            text = m.group(2).strip()
+        else:
+            speaker = 0
+        out.append({"start": start, "end": end, "speaker": speaker, "text": text})
+    return out
 
 
 def parse_vtt(label_path: Path) -> list[dict]:
