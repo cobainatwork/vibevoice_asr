@@ -102,7 +102,7 @@ class Project(Base):
         ForeignKey("model_versions.id", ondelete="SET NULL")
     )
     webhook_url: Mapped[str | None] = mapped_column(String(500))
-    webhook_secret: Mapped[str | None] = mapped_column(String(64))
+    webhook_secret: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

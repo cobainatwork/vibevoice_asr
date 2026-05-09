@@ -776,29 +776,44 @@ def merge_chunk_results(chunks: list[Chunk],
 
 ### 6.6 模型切換流程
 
-當使用者切換專案的 active model：
+切 model 為內部 admin 觸發、會中斷 v1 服務的操作，採 **drain → switch → ready 三段式 SOP**：
 
 ```
-1. 檢查 target ModelVersion 路徑
-   - 若 type=base：路徑 = "microsoft/VibeVoice-ASR" (HF)
-   - 若 type=merged：路徑 = data/merged/{project_id}/{run_id}/
+階段 0：準備
+  1. 檢查 target ModelVersion 路徑
+     - 若 type=base：路徑 = "microsoft/VibeVoice-ASR" (HF)
+     - 若 type=merged：路徑 = data/merged/{project_id}/{run_id}/
+  2. 比對目前 vLLM container 載入的 path（從 /v1/models 查詢）
+     - 相同 → 跳過後續步驟，回前端 noop
+     - 不同 → 進入階段 1
 
-2. 比對目前 vLLM container 載入的 path
-   - 從 /v1/models 查詢
-   - 相同 → 跳過
+階段 1：drain
+  1. 標記 vllm_status=switching（in-memory + Redis pub/sub 廣播）
+  2. v1 端 middleware 對新請求一律回 503 vllm_unavailable，
+     response header 帶 Retry-After=60
+  3. WS 已 ack 的 session：允許繼續上傳並 enqueue Job，
+     但 worker 端 transcribe_job 在 vllm_status=switching 時 sleep + 重試
+     （每 2 秒一次）
+  4. poll 至 queue.pending=0 且 queue.running=0
+     - timeout 300 秒；超過則記 warning 並強切
+       （in-flight job 將收到 vllm_unavailable）
 
-3. 不同 → 重啟 vLLM
-   a. docker stop vibevoice-vllm
-   b. docker rm vibevoice-vllm
-   c. docker run ... -v <new_path>:/model ...
-   d. wait_for_ready: poll /v1/models 直到 200 OK，timeout 120 秒
+階段 2：switch
+  1. docker stop vibevoice-vllm
+  2. docker rm vibevoice-vllm
+  3. docker run ... -v <new_path>:/model ...
+  4. wait_for_ready：poll /v1/models 直到 200 OK，timeout 120 秒
 
-4. 更新 Project.active_model_id
-
-5. 通知前端（SSE broadcast）
+階段 3：ready
+  1. 標記 vllm_status=ready
+  2. 更新 Project.active_model_id
+  3. 廣播 SSE 給前端
+  4. queue 中 pending 的 transcribe_job 自動恢復處理
 ```
 
-預估切換時間：30-90 秒。
+預估切換時間：drain ≤300 秒（依 queue 深度）+ switch 30-90 秒。
+
+> 內測階段建議切 model 在離峰時段操作。正式環境如導入動態 LoRA（§6.7）可免重啟，此 SOP 僅在 merge & swap 模式適用。
 
 ### 6.7 ⚠️ 待驗證：vLLM 動態 LoRA
 
@@ -896,7 +911,7 @@ class Project(Base):
     hotwords: Mapped[list[str]] = mapped_column(JSON, default=list)
     active_model_id: Mapped[int | None] = mapped_column(ForeignKey("model_versions.id"))
     webhook_url: Mapped[str | None] = mapped_column(String(500))
-    webhook_secret: Mapped[str | None] = mapped_column(String(64))  # 用於 HMAC
+    webhook_secret: Mapped[str | None] = mapped_column(String(128))  # 用於 HMAC，raw 儲存（HMAC 必須）
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1392,7 +1407,10 @@ GPU_INFERENCE_DEVICES=0
 GPU_TRAINING_DEVICES=0
 
 # === vLLM ===
-VLLM_BASE_URL=http://vibevoice-vllm:8000   # 或逗號分隔多個
+# 預設走 host bridge：vllm 服務在 docker-compose profiles: ["manual"]
+# 由 backend 動態啟停，不在 compose network 中。
+# 型別為 str | list[str]（多 instance 用逗號分隔，client 內 round-robin）。
+VLLM_BASE_URL=http://host.docker.internal:8000
 VLLM_CONTAINER_NAME=vibevoice-vllm
 VLLM_TENSOR_PARALLEL=1
 VLLM_DATA_PARALLEL=1
@@ -1425,7 +1443,10 @@ WS_IDLE_TIMEOUT_SEC=60
 TRAIN_DOCKER_IMAGE=vibevoice-train:latest
 
 # === HF ===
-HF_HOME=/data/hf_cache
+# HF_CACHE_HOST：宿主機端路徑（compose 掛入容器之 mount source）。
+# 容器內 HF_HOME 由 vLLM image 預設 /root/.cache/huggingface 處理，無須在此設定。
+# Backend / worker 端 Settings.hf_home 僅用於建立目錄，不需與 HF_CACHE_HOST 同步。
+HF_CACHE_HOST=./data/hf_cache
 HF_HUB_OFFLINE=0
 
 # === Webhook ===
@@ -2362,7 +2383,7 @@ sleep 30
 |---|---|
 | API Key 儲存 | SHA-256 hash，不儲存 plain |
 | API Key 顯示 | 建立時唯一一次顯示 plain；之後只顯示 prefix |
-| Webhook secret | 同上策略 |
+| Webhook secret | **raw 儲存**（HMAC server 端必須持有 raw 才能簽章）；建立時唯一一次顯示 plain，UI 後續顯示前 8 碼遮罩；正式環境補欄位加密 at-rest |
 | Webhook 簽章 | HMAC-SHA256，header `X-Webhook-Signature: sha256=...` |
 | Webhook timestamp | header `X-Webhook-Timestamp`，QC 端應驗證 ≤5 分鐘內 |
 | Docker socket | Backend 內限制 image / container name 白名單 |
@@ -2655,6 +2676,8 @@ metadata: {"call_id": "abc"}  (optional, JSON string)
 {"code": "audio_too_long", "detail": "Audio is 145s, sync limit is 120s. Use WS endpoint instead."}
 ```
 
+**Job 持久化**：sync 不論成功失敗都 persist 為 Job 一筆（`source=v1_api_sync`），方便 admin/jobs 列表審計。失敗時 `status=FAILED`、`error` 欄位記錯誤碼與細節。
+
 ### 17.5 Job 狀態查詢
 
 `GET /api/v1/jobs/{job_id}`
@@ -2766,14 +2789,24 @@ QC 端建議：
 防止 QC 端重試造成重複 Job：
 
 - 機制：`Idempotency-Key` header（REST）或 `idempotency_key` 欄位（WS start）
-- 範圍：同一個 API Key 內
+- **範圍：同一個 project 內**（內測階段簡化；同 project 多把 key 共用同一範圍。日後若需多租戶可加 `api_key_id` 欄位收緊）
 - TTL：24 小時
-- 實作：Redis `SETNX` + DB unique constraint 兜底
+- 實作：Redis `SETNX` + DB unique constraint `(project_id, idempotency_key)` 兜底
 
-行為：
+#### Body hash 算法（server 內部規則，不對 QC SDK 揭露）
+
+| Endpoint | Hash 對象 |
+|---|---|
+| `POST /api/v1/transcribe/sync` | `sha256(file_bytes)` |
+| `WS /api/v1/transcribe` | `sha256(canonical_json(start_metadata))`，canonical 為 `json.dumps(meta, separators=(",",":"), sort_keys=True)` 之 byte 表示 |
+
+WS 不 hash binary 內容（流式上傳重算成本高）；簡化以 start metadata 為 dedupe 依據，內測階段足夠。本規則為 server 端內部判斷，不寫入 OpenAPI / SDK 文件，未來可調整。
+
+#### 行為
+
 | 狀況 | Server 行為 |
 |---|---|
-| 新 key | 建 Job，記錄 key→job_id 24h |
+| 新 key | 建 Job，記錄 `key → (job_id, body_hash)` 24h |
 | 重複 key + 同 body hash | 回原 job（200，不再 process） |
 | 重複 key + 不同 body hash | 拒絕（409 `idempotency_replay`） |
 
@@ -2880,7 +2913,30 @@ for seg in result["segments"]:
 | V11 | WS 上傳大檔（>100MB）記憶體佔用 |
 | V12 | Webhook 重試在 Redis 重啟後是否會丟資料 |
 
-### 18.3 文件中標記
+### 18.3 低優先（內測完後再處理）
+
+| ID | 項目 |
+|---|---|
+| V13 | 環境變數命名前綴統一（`BACKEND_*` / `VLLM_*` / `AUDIO_*` / `WEBHOOK_*`），目前 `MAX_AUDIO_DURATION_SEC` 等無前綴變數混用 |
+| V14 | docker-compose worker 多 replicas 時 `container_name` 衝突（規格文字已落後 compose 實作） |
+| V15 | `tests/conftest.py` Redis port 硬編碼 6379，使用者改 `REDIS_PORT` 會壞 |
+| V16 | v1 API 對外時 CORS 政策（目前 `allow_origins=["*"]`，正式環境需限制） |
+| V17 | Webhook callback URL SSRF 防護（強制 https、禁內網 IP） |
+| V18 | Audio 支援的 sample rate / bit depth 上下游驗證 |
+| V19 | 訓練資料量下限與 epoch 推薦表（給 admin UI 提示） |
+| V20 | `/api/admin/system/queue` 之 `oldest_age_sec` 取得機制（Arq 不直接暴露 queue depth） |
+| V21 | 動態 LoRA 成功時 §6.6 與 §10 雙路徑分支邏輯 |
+| V22 | scripts CLI 介面規格（`qc_simulator.py` / `seed_demo_project.py` 參數） |
+| V23 | `docker_ctrl` 白名單 image 比對採 prefix match（`name == prefix or name.startswith(prefix + ":")`） |
+| V24 | Postgres 切換時 `JSON` 欄位需手動改 `JSONB` 才有 GIN index 效能 |
+| V25 | `used_model_id` 已刪除時 API 輸出 `"model": "deleted"` + warnings 加 `model_deleted` |
+| V26 | API Key DELETE 採 soft delete（`is_active=false`），保留 IntegrationCall audit trail |
+| V27 | Backend lifespan 不主動拉 vLLM；改為第一次 v1 transcribe 請求 lazy 拉 + admin UI 手動按鈕 |
+| V28 | Speaker re-mapping 是否可用 ASR-7B 內含 diarization 抽 embedding 改善（現為 heuristics） |
+| V29 | WS `progress` frame 在 client 未提供 `expected_size_bytes` 時的 fallback（僅回 `received_bytes`） |
+| V30 | `session_id` 用途定位為 logging / debug，不持久化、不寫 IntegrationCall |
+
+### 18.4 文件中標記
 
 搜尋 `⚠️` 和 `🔬` 找所有待驗證項目。
 
