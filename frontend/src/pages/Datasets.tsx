@@ -6,11 +6,12 @@
  */
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Download, Upload as UploadIcon, FileText, Trash2, Edit3 } from "lucide-react";
+import { Download, Upload as UploadIcon, FileText, Trash2, Edit3, History } from "lucide-react";
 import { datasetsApi } from "../api/datasets";
 import { useProjectStore } from "../stores/projectStore";
 import { useToast } from "../hooks/useToast";
 import { DatasetImportModal } from "../components/DatasetImportModal";
+import { FromJobModal } from "../components/FromJobModal";
 import type { DatasetItem, ExportFormat, TemplateFormat } from "../api/types";
 
 const TEMPLATE_FORMATS: TemplateFormat[] = ["json", "xlsx", "srt", "txt"];
@@ -23,6 +24,7 @@ export default function Datasets() {
   const refetch = useProjectStore((s) => s.refetch);
   const [items, setItems] = useState<DatasetItem[]>([]);
   const [importOpen, setImportOpen] = useState(false);
+  const [fromJobOpen, setFromJobOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
@@ -87,6 +89,13 @@ export default function Datasets() {
               ))}
             </div>
           </details>
+          <button
+            type="button"
+            onClick={() => setFromJobOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 border border-slate-300 rounded cursor-pointer hover:bg-slate-50"
+          >
+            <History className="w-4 h-4" /> 從歷史轉錄
+          </button>
           <button
             type="button"
             onClick={() => setImportOpen(true)}
@@ -168,6 +177,12 @@ export default function Datasets() {
         projectId={projectId}
         onClose={() => setImportOpen(false)}
         onImported={() => reload()}
+      />
+      <FromJobModal
+        open={fromJobOpen}
+        projectId={projectId}
+        onClose={() => setFromJobOpen(false)}
+        onCreated={() => reload()}
       />
     </div>
   );
