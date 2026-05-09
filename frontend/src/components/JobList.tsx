@@ -1,84 +1,70 @@
-/**
- * Renders a list of Jobs with status, progress, and actions.
- * M3 milestone.
- */
-import type { Job } from "../api/types";
-import { formatDuration } from "../lib/format";
+import { Link } from "react-router-dom";
+import { Eye, Trash2 } from "lucide-react";
+import { JobStatusBadge } from "./JobStatusBadge";
+import type { JobOut } from "../api/types";
 
 interface Props {
-  jobs: Job[];
-  onView?: (job: Job) => void;
-  onConvertToDataset?: (job: Job) => void;
-  onCancel?: (job: Job) => void;
-  onDelete?: (job: Job) => void;
+  jobs: JobOut[];
+  projectId: number;
+  onDelete?: (j: JobOut) => void;
 }
 
-const SOURCE_BADGE: Record<string, string> = {
-  admin_upload: "👤 ADMIN",
-  v1_api_async: "🌐 V1-WS",
-  v1_api_sync: "🌐 V1-SYNC",
-  v1_api_ws: "🌐 V1-WS",
-};
+function formatDuration(sec: number | null): string {
+  if (sec == null) return "—";
+  if (sec < 60) return `${sec.toFixed(1)} 秒`;
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m} 分 ${s} 秒`;
+}
 
-const STATUS_COLOR: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-600",
-  queued: "bg-blue-100 text-blue-700",
-  running: "bg-yellow-100 text-yellow-700",
-  done: "bg-green-100 text-green-700",
-  failed: "bg-red-100 text-red-700",
-  cancelled: "bg-gray-100 text-gray-500",
-};
-
-export function JobList({ jobs, onView, onConvertToDataset, onCancel, onDelete }: Props) {
+export function JobList({ jobs, projectId, onDelete }: Props) {
   if (jobs.length === 0) {
-    return <div className="text-gray-500 text-sm">尚無任務</div>;
+    return <div className="bg-white border border-slate-200 rounded-lg p-12 text-center text-slate-500">尚無 Job</div>;
   }
-
   return (
-    <div className="border rounded bg-white divide-y">
-      {jobs.map((job) => (
-        <div key={job.id} className="flex items-center gap-3 p-3 text-sm">
-          <span className="text-xs text-gray-400 w-20 shrink-0">
-            {SOURCE_BADGE[job.source]}
-          </span>
-          <span className="flex-1 truncate">{job.filename}</span>
-          <span className="w-16 text-right text-gray-500 tabular-nums">
-            {formatDuration(job.duration_sec)}
-          </span>
-          <span
-            className={`text-xs px-2 py-0.5 rounded ${STATUS_COLOR[job.status]}`}
-          >
-            {job.status}
-          </span>
-          {job.status === "running" && (
-            <span className="w-12 text-xs tabular-nums">
-              {Math.round(job.progress * 100)}%
-            </span>
-          )}
-          <div className="flex gap-2">
-            {onView && job.status === "done" && (
-              <button onClick={() => onView(job)} className="text-blue-600 hover:underline">
-                檢視
-              </button>
-            )}
-            {onConvertToDataset && job.status === "done" && (
-              <button onClick={() => onConvertToDataset(job)} className="text-blue-600 hover:underline">
-                轉訓練
-              </button>
-            )}
-            {onCancel && (job.status === "running" || job.status === "queued") && (
-              <button onClick={() => onCancel(job)} className="text-orange-600 hover:underline">
-                取消
-              </button>
-            )}
-            {onDelete && (
-              <button onClick={() => onDelete(job)} className="text-red-600 hover:underline">
-                刪除
-              </button>
-            )}
-          </div>
-        </div>
-      ))}
+    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500">
+          <tr>
+            <th className="px-4 py-2 text-left">狀態</th>
+            <th className="px-4 py-2 text-left">時間</th>
+            <th className="px-4 py-2 text-left">檔名</th>
+            <th className="px-4 py-2 text-left">時長</th>
+            <th className="px-4 py-2 text-left">進度</th>
+            <th className="px-4 py-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobs.map((j) => (
+            <tr key={j.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors duration-200">
+              <td className="px-4 py-2"><JobStatusBadge status={j.status} /></td>
+              <td className="px-4 py-2 text-slate-600 font-mono text-xs">{new Date(j.created_at).toLocaleTimeString("zh-TW")}</td>
+              <td className="px-4 py-2 text-slate-900 truncate max-w-[16rem]">{j.filename}</td>
+              <td className="px-4 py-2 text-slate-600">{formatDuration(j.duration_sec)}</td>
+              <td className="px-4 py-2 text-slate-600">
+                {j.status === "running" || j.status === "queued"
+                  ? <span>{j.chunks_done}/{j.chunks_total} ({Math.round(j.progress * 100)}%)</span>
+                  : j.status === "failed"
+                  ? <span className="text-red-600 font-mono text-xs" title={j.error ?? ""}>{j.error?.split(":")[0] ?? "—"}</span>
+                  : "—"
+                }
+              </td>
+              <td className="px-4 py-2 text-right">
+                {j.status === "done" && (
+                  <Link to={`/projects/${projectId}/edit/${j.id}?mode=view`} className="inline-flex items-center gap-1 text-blue-600 cursor-pointer hover:text-blue-800 transition-colors duration-200 mr-3">
+                    <Eye className="w-4 h-4" /> 檢視
+                  </Link>
+                )}
+                {onDelete && (
+                  <button type="button" aria-label="刪除" onClick={() => onDelete(j)} className="text-slate-400 cursor-pointer hover:text-red-600 transition-colors duration-200">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
