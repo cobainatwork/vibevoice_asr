@@ -7,6 +7,7 @@ import Projects from "./pages/Projects";
 import Hotwords from "./pages/Hotwords";
 import Offline from "./pages/Offline";
 import Editor from "./pages/Editor";
+import Datasets from "./pages/Datasets";
 import DatasetEditor from "./pages/DatasetEditor";
 import System from "./pages/System";
 
@@ -32,10 +33,10 @@ export default function App() {
             path="/projects/:id/datasets/:itemId/editor"
             element={<DatasetEditor />}
           />
+          <Route path="/projects/:id/datasets" element={<Datasets />} />
           <Route path="/system" element={<System />} />
 
           {/* M3 不實作的頁面：toast 提示後 redirect */}
-          <Route path="/projects/:id/datasets" element={<NotImplemented pageName="資料集" />} />
           <Route path="/projects/:id/training" element={<NotImplemented pageName="訓練" />} />
           <Route path="/projects/:id/training/:runId" element={<NotImplemented pageName="訓練" />} />
           <Route path="/projects/:id/models" element={<NotImplemented pageName="模型" />} />
