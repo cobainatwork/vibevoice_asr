@@ -5,7 +5,11 @@ See SPEC.md §7.3.1、§7.3.2.
 """
 from __future__ import annotations
 
+import re
+from datetime import datetime
+
 from fastapi import APIRouter, Body, Depends
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -93,6 +97,30 @@ async def set_hotwords(
     project.hotwords = list(hotwords)
     await db.flush()
     return project.hotwords
+
+
+@router.get("/projects/{project_id}/hotwords/export")
+async def export_hotwords(
+    project_id: int,
+    format: str = "txt",
+    db: AsyncSession = Depends(get_db),
+):
+    """匯出 project hotwords。M3 階段僅支援 txt（一詞一行 UTF-8）。"""
+    if format != "txt":
+        raise http_error(
+            ErrorCode.UNSUPPORTED_FORMAT,
+            f"format {format!r} not supported (only 'txt')",
+        )
+    project = await _get_or_404(db, project_id)
+    body = "\n".join(project.hotwords or []) + ("\n" if project.hotwords else "")
+    safe_name = re.sub(r"[^\w\-]+", "-", project.name).strip("-") or "project"
+    today = datetime.utcnow().strftime("%Y%m%d")
+    filename = f"hotwords-{safe_name}-{today}.txt"
+    return PlainTextResponse(
+        content=body,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        media_type="text/plain; charset=utf-8",
+    )
 
 
 # === Helpers ===
