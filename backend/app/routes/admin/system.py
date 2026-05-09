@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.db import get_db
 from app.schemas import GpuInfo, HealthOut, QueueInfo, VllmStatusOut
 from app.services.deployment import make_strategy
@@ -23,41 +23,14 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+# === Endpoints ===
+
+
 @router.get("/system/health", response_model=HealthOut)
 async def health(db: AsyncSession = Depends(get_db)):
-    """
-    Aggregate health：DB / Redis / vLLM 各自 best-effort，失敗不互相影響。
-    """
-    settings = get_settings()
-
-    # DB ping
-    try:
-        await db.execute(sql_text("SELECT 1"))
-        db_status = "ok"
-    except Exception as e:
-        logger.warning("db ping failed: %s", e)
-        db_status = f"down: {e}"
-
-    # Redis ping
-    try:
-        pool = await get_pool()
-        await pool.ping()
-        redis_status = "ok"
-    except Exception as e:
-        logger.warning("redis ping failed: %s", e)
-        redis_status = f"down: {e}"
-
-    # vLLM ping
-    if settings.mock_vllm:
-        vllm_status = "mock"
-    else:
-        client = VllmClient(settings.vllm_base_url)
-        try:
-            vllm_status = "ready" if await client.health() else "down"
-        except Exception as e:
-            logger.warning("vllm ping failed: %s", e)
-            vllm_status = f"down: {e}"
-
+    db_status = await _check_db(db)
+    redis_status = await _check_redis()
+    vllm_status = await _check_vllm(get_settings())
     return HealthOut(
         ok=(db_status == "ok" and redis_status == "ok"),
         vllm_status=vllm_status,
@@ -75,15 +48,7 @@ async def vllm_status_endpoint():
             model=settings.vllm_default_model,
             uptime_sec=None,
         )
-    client = VllmClient(settings.vllm_base_url)
-    try:
-        if not await client.health():
-            return VllmStatusOut(status="down", model=None, uptime_sec=None)
-        model = await client.get_loaded_model()
-    except Exception as e:
-        logger.warning("vllm_status failed: %s", e)
-        return VllmStatusOut(status="down", model=None, uptime_sec=None)
-    return VllmStatusOut(status="ready", model=model, uptime_sec=None)
+    return await _query_vllm_status(settings)
 
 
 @router.get("/system/profile")
@@ -110,5 +75,49 @@ async def gpu_info():
 
 @router.get("/system/queue", response_model=QueueInfo)
 async def queue_info():
-    stats = await queue_depth()
-    return QueueInfo(**stats)
+    return QueueInfo(**(await queue_depth()))
+
+
+# === Helpers ===
+
+
+async def _check_db(db: AsyncSession) -> str:
+    try:
+        await db.execute(sql_text("SELECT 1"))
+        return "ok"
+    except Exception as e:
+        logger.warning("db ping failed: %s", e)
+        return f"down: {e}"
+
+
+async def _check_redis() -> str:
+    try:
+        pool = await get_pool()
+        await pool.ping()
+        return "ok"
+    except Exception as e:
+        logger.warning("redis ping failed: %s", e)
+        return f"down: {e}"
+
+
+async def _check_vllm(settings: Settings) -> str:
+    if settings.mock_vllm:
+        return "mock"
+    try:
+        client = VllmClient(settings.vllm_base_url)
+        return "ready" if await client.health() else "down"
+    except Exception as e:
+        logger.warning("vllm ping failed: %s", e)
+        return f"down: {e}"
+
+
+async def _query_vllm_status(settings: Settings) -> VllmStatusOut:
+    client = VllmClient(settings.vllm_base_url)
+    try:
+        if not await client.health():
+            return VllmStatusOut(status="down", model=None, uptime_sec=None)
+        model = await client.get_loaded_model()
+    except Exception as e:
+        logger.warning("vllm_status failed: %s", e)
+        return VllmStatusOut(status="down", model=None, uptime_sec=None)
+    return VllmStatusOut(status="ready", model=model, uptime_sec=None)

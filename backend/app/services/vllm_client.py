@@ -87,90 +87,102 @@ class VllmClient:
         on_token: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
         """
-        Send audio to vLLM and return parsed result.
+        Send audio to vLLM and return {raw_text, elapsed_sec, attempts, partial}。
 
-        Returns:
-            {
-                "raw_text": str,        # accumulated content
-                "elapsed_sec": float,
-                "attempts": int,        # 1..MAX_VLLM_RETRIES
-                "partial": bool,        # True if recovery exhausted
-            }
-
-        Note: parsing into segments is done by app.utils.parser separately.
+        Repetition recovery：偵測迴圈時升 temperature 重試（上限 MAX_VLLM_RETRIES）；
+        全部耗盡仍 repetition → 回 partial=True 與已生成內容。
+        Parsing 由 app.utils.parser 另外處理。
         """
         if get_settings().mock_vllm:
             return await self._mock_transcribe(duration_sec, hotwords, on_token)
 
-        last_buffer = ""
         start = time.monotonic()
+        last_buffer = ""
 
         for attempt in range(MAX_VLLM_RETRIES):
-            temperature = RETRY_TEMPERATURES[
-                min(attempt, len(RETRY_TEMPERATURES) - 1)
-            ]
             payload = self._build_payload(
-                audio_bytes, mime, duration_sec, hotwords, temperature=temperature
+                audio_bytes, mime, duration_sec, hotwords,
+                temperature=self._temperature_for(attempt),
             )
-            url = self._next_url().rstrip("/") + "/v1/chat/completions"
+            buffer, repeated = await self._stream_attempt(payload, on_token, attempt)
+            if not repeated:
+                return self._build_result(buffer, attempt + 1, start, partial=False)
+            last_buffer = buffer
 
-            buffer = ""
-            repetition = False
-            try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    async with client.stream("POST", url, json=payload) as resp:
-                        if resp.status_code != 200:
-                            body = (await resp.aread())[:200]
-                            raise AppError(
-                                ErrorCode.VLLM_UNAVAILABLE,
-                                f"vLLM HTTP {resp.status_code}: {body!r}",
+        return self._build_result(last_buffer, MAX_VLLM_RETRIES, start, partial=True)
+
+    @staticmethod
+    def _temperature_for(attempt: int) -> float:
+        return RETRY_TEMPERATURES[min(attempt, len(RETRY_TEMPERATURES) - 1)]
+
+    async def _stream_attempt(
+        self,
+        payload: dict[str, Any],
+        on_token: Callable[[str], Awaitable[None]] | None,
+        attempt: int,
+    ) -> tuple[str, bool]:
+        """單次 SSE 串流 attempt；若觸發 repetition 提早回傳 (buffer, True)。"""
+        url = self._next_url().rstrip("/") + "/v1/chat/completions"
+        buffer = ""
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with client.stream("POST", url, json=payload) as resp:
+                    self._raise_for_bad_status(resp)
+                    async for line in resp.aiter_lines():
+                        content = self._extract_sse_content(line)
+                        if content is None:
+                            continue
+                        buffer += content
+                        if on_token is not None:
+                            await on_token(content)
+                        if self._detect_repetition(buffer):
+                            logger.warning(
+                                "Repetition detected attempt=%d len=%d",
+                                attempt + 1, len(buffer),
                             )
-                        async for line in resp.aiter_lines():
-                            if not line or not line.startswith("data:"):
-                                continue
-                            data = line[5:].strip()
-                            if data == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(data)
-                            except json.JSONDecodeError:
-                                continue
-                            choices = chunk.get("choices") or []
-                            if not choices:
-                                continue
-                            delta = choices[0].get("delta") or {}
-                            content = delta.get("content")
-                            if not content:
-                                continue
-                            buffer += content
-                            if on_token is not None:
-                                await on_token(content)
-                            if self._detect_repetition(buffer):
-                                repetition = True
-                                logger.warning(
-                                    "Repetition detected at attempt=%d, len=%d",
-                                    attempt + 1, len(buffer),
-                                )
-                                break
-            except httpx.HTTPError as e:
-                raise AppError(
-                    ErrorCode.VLLM_UNAVAILABLE, f"vLLM connection failed: {e}"
-                ) from e
+                            return buffer, True
+        except httpx.HTTPError as e:
+            raise AppError(
+                ErrorCode.VLLM_UNAVAILABLE, f"vLLM connection failed: {e}"
+            ) from e
+        return buffer, False
 
-            if not repetition:
-                return {
-                    "raw_text": buffer,
-                    "elapsed_sec": time.monotonic() - start,
-                    "attempts": attempt + 1,
-                    "partial": False,
-                }
-            last_buffer = buffer  # 留最後一次的內容當 partial 結果
+    @staticmethod
+    async def _raise_for_bad_status(resp: httpx.Response) -> None:
+        if resp.status_code == 200:
+            return
+        body = (await resp.aread())[:200]
+        raise AppError(
+            ErrorCode.VLLM_UNAVAILABLE,
+            f"vLLM HTTP {resp.status_code}: {body!r}",
+        )
 
+    @staticmethod
+    def _extract_sse_content(line: str) -> str | None:
+        """從一行 SSE 抽 delta.content；非 data 行 / [DONE] / 空 content 回 None。"""
+        if not line or not line.startswith("data:"):
+            return None
+        data = line[5:].strip()
+        if data == "[DONE]":
+            return None
+        try:
+            chunk = json.loads(data)
+        except json.JSONDecodeError:
+            return None
+        choices = chunk.get("choices") or []
+        if not choices:
+            return None
+        return (choices[0].get("delta") or {}).get("content") or None
+
+    @staticmethod
+    def _build_result(
+        buffer: str, attempts: int, start_monotonic: float, partial: bool
+    ) -> dict[str, Any]:
         return {
-            "raw_text": last_buffer,
-            "elapsed_sec": time.monotonic() - start,
-            "attempts": MAX_VLLM_RETRIES,
-            "partial": True,
+            "raw_text": buffer,
+            "elapsed_sec": time.monotonic() - start_monotonic,
+            "attempts": attempts,
+            "partial": partial,
         }
 
     @staticmethod

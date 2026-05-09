@@ -28,6 +28,8 @@ class ErrorCode(str, Enum):
     INVALID_METADATA = "invalid_metadata"
     INVALID_HOTWORDS = "invalid_hotwords"
     INVALID_PROJECT = "invalid_project"
+    PROJECT_NOT_FOUND = "project_not_found"
+    PROJECT_NAME_CONFLICT = "project_name_conflict"
 
     # === Audio errors ===
     AUDIO_TOO_LONG = "audio_too_long"
@@ -76,6 +78,8 @@ HTTP_STATUS_FOR_CODE: dict[ErrorCode, int] = {
     ErrorCode.INVALID_METADATA: 400,
     ErrorCode.INVALID_HOTWORDS: 400,
     ErrorCode.INVALID_PROJECT: 400,
+    ErrorCode.PROJECT_NOT_FOUND: 404,
+    ErrorCode.PROJECT_NAME_CONFLICT: 409,
     ErrorCode.AUDIO_TOO_LONG: 400,
     ErrorCode.AUDIO_TOO_SHORT: 400,
     ErrorCode.AUDIO_UNREADABLE: 400,
@@ -117,3 +121,20 @@ class AppError(Exception):
         d = {"code": self.code.value, "detail": self.detail}
         d.update(self.extra)
         return d
+
+
+def http_error(
+    code: ErrorCode, detail: str, status: int | None = None
+) -> "HTTPException":
+    """
+    Build an HTTPException with structured `{code, detail}` body.
+
+    status 預設用 HTTP_STATUS_FOR_CODE 對應的碼；caller 可顯式覆寫。
+    Routes 用此 helper 取代手寫 `HTTPException(..., detail={...})`，
+    保持 v1 / admin 端錯誤格式一致。
+    """
+    from fastapi import HTTPException
+    return HTTPException(
+        status_code=status or HTTP_STATUS_FOR_CODE.get(code, 500),
+        detail={"code": code.value, "detail": detail},
+    )

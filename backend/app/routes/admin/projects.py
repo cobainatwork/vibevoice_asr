@@ -5,27 +5,20 @@ See SPEC.md §7.3.1、§7.3.2.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.errors import ErrorCode, http_error
 from app.models import Project
 from app.schemas import ProjectIn, ProjectOut, ProjectPatch
 
 router = APIRouter()
 
 
-async def _get_or_404(db: AsyncSession, project_id: int) -> Project:
-    project = await db.get(Project, project_id)
-    if project is None:
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "project_not_found",
-                    "detail": f"project {project_id} not found"},
-        )
-    return project
+# === Endpoints ===
 
 
 @router.get("/projects", response_model=list[ProjectOut])
@@ -47,15 +40,7 @@ async def create_project(
         webhook_url=payload.webhook_url,
     )
     db.add(project)
-    try:
-        await db.flush()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "project_name_conflict",
-                    "detail": f"project name {payload.name!r} already exists"},
-        )
+    await _flush_or_409(db, name=payload.name)
     await db.refresh(project)
     return project
 
@@ -74,14 +59,7 @@ async def update_project(
     project = await _get_or_404(db, project_id)
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(project, k, v)
-    try:
-        await db.flush()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail={"code": "project_name_conflict", "detail": "name conflict"},
-        )
+    await _flush_or_409(db, name=payload.name)
     await db.refresh(project)
     return project
 
@@ -115,3 +93,28 @@ async def set_hotwords(
     project.hotwords = list(hotwords)
     await db.flush()
     return project.hotwords
+
+
+# === Helpers ===
+
+
+async def _get_or_404(db: AsyncSession, project_id: int) -> Project:
+    project = await db.get(Project, project_id)
+    if project is None:
+        raise http_error(
+            ErrorCode.PROJECT_NOT_FOUND,
+            f"project {project_id} not found",
+        )
+    return project
+
+
+async def _flush_or_409(db: AsyncSession, *, name: str | None) -> None:
+    """Flush；name 衝突轉 409 PROJECT_NAME_CONFLICT。"""
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise http_error(
+            ErrorCode.PROJECT_NAME_CONFLICT,
+            f"project name {name!r} already exists" if name else "name conflict",
+        )
