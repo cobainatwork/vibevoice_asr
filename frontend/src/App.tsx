@@ -7,6 +7,7 @@ import Projects from "./pages/Projects";
 import Hotwords from "./pages/Hotwords";
 import Offline from "./pages/Offline";
 import Editor from "./pages/Editor";
+import DatasetEditor from "./pages/DatasetEditor";
 import System from "./pages/System";
 
 function NotImplemented({ pageName }: { pageName: string }) {
@@ -27,6 +28,10 @@ export default function App() {
           <Route path="/projects/:id/hotwords" element={<Hotwords />} />
           <Route path="/projects/:id/offline" element={<Offline />} />
           <Route path="/projects/:id/edit/:itemId" element={<Editor />} />
+          <Route
+            path="/projects/:id/datasets/:itemId/editor"
+            element={<DatasetEditor />}
+          />
           <Route path="/system" element={<System />} />
 
           {/* M3 不實作的頁面：toast 提示後 redirect */}
