@@ -129,12 +129,6 @@ def parse_xlsx(label_path: Path) -> list[dict]:
     return out
 
 
-def parse_csv(label_path: Path) -> list[dict]:
-    """Parse CSV file."""
-    # TODO(M3.5): use pandas
-    raise NotImplementedError
-
-
 def parse_srt(label_path: Path) -> list[dict]:
     """
     Parse SubRip file. Speaker prefix optional ('Speaker N: ...' / 'Speaker N：...').
@@ -158,12 +152,6 @@ def parse_srt(label_path: Path) -> list[dict]:
     return out
 
 
-def parse_vtt(label_path: Path) -> list[dict]:
-    """Parse WebVTT file."""
-    # TODO(M3.5): use webvtt-py
-    raise NotImplementedError
-
-
 def parse_json(label_path: Path) -> list[dict]:
     """Parse JSON file (assumed already in training format). Pass-through with validation."""
     data = json.loads(label_path.read_text(encoding="utf-8"))
@@ -173,28 +161,41 @@ def parse_json(label_path: Path) -> list[dict]:
     return segs
 
 
-def parse_txt(label_path: Path) -> list[dict]:
+def parse_txt(label_path: Path, audio_duration: float = 0.0) -> list[dict]:
     """
-    Parse plain text format. Each line:
-        [hh:mm:ss.ms] Speaker N: text
+    Parse plain text. 每行：[hh:mm:ss.ms] Speaker N: text
+    end_time 推算：下一行 start；最後一行用 audio_duration。
     """
-    # TODO(M3.5)
-    raise NotImplementedError
+    line_re = re.compile(
+        r"^\[(\d+:\d{1,2}:\d{1,2}(?:\.\d+)?)\]\s+Speaker\s*(\d+)\s*[:：]\s*(.+)$"
+    )
+    raw: list[tuple[float, int, str]] = []
+    for line in label_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        m = line_re.match(line)
+        if not m:
+            logger.warning("parse_txt: skip unmatched line: %r", line[:80])
+            continue
+        ts, sp, txt = m.groups()
+        start = parse_time(ts)
+        speaker = max(0, int(sp) - 1)
+        raw.append((start, speaker, txt.strip()))
+
+    if not raw:
+        raise AppError(ErrorCode.IMPORT_PARSE_FAILED, "No valid lines parsed")
+
+    out: list[dict] = []
+    for i, (start, speaker, text) in enumerate(raw):
+        end = raw[i + 1][0] if i + 1 < len(raw) else audio_duration
+        out.append({"start": start, "end": end, "speaker": speaker, "text": text})
+    return out
 
 
 # ============================================================
 # Top-level entry
 # ============================================================
-
-
-PARSERS = {
-    "xlsx": parse_xlsx,
-    "csv": parse_csv,
-    "srt": parse_srt,
-    "vtt": parse_vtt,
-    "json": parse_json,
-    "txt": parse_txt,
-}
 
 
 def import_label(
@@ -204,18 +205,20 @@ def import_label(
     format: str,
     project_hotwords: list[str],
 ) -> dict:
-    """
-    Top-level: parse → validate → return canonical training JSON dict.
-
-    See SPEC.md §9.1 for format.
-    """
-    if format not in PARSERS:
+    """Top-level: parse → validate → return canonical training JSON dict."""
+    if format not in {"json", "xlsx", "srt", "txt"}:
         raise AppError(
             ErrorCode.UNSUPPORTED_FORMAT,
-            f"Format must be one of {list(PARSERS.keys())}",
+            "Format must be one of [json, xlsx, srt, txt]",
         )
-    parser = PARSERS[format]
-    segments = parser(label_path)
+    if format == "txt":
+        segments = parse_txt(label_path, audio_duration=audio_duration)
+    elif format == "json":
+        segments = parse_json(label_path)
+    elif format == "xlsx":
+        segments = parse_xlsx(label_path)
+    elif format == "srt":
+        segments = parse_srt(label_path)
     validate_segments(segments, audio_duration)
     return {
         "audio_duration": audio_duration,
