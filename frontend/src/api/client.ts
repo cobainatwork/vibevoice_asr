@@ -1,57 +1,93 @@
-/**
- * Base HTTP client wrapper.
- *
- * All API modules (projects.ts, jobs.ts, ...) should use these helpers.
- */
+import { useToastStore } from "../stores/toastStore";
+import type { ApiErrorBody } from "./types";
 
-const BASE = (import.meta as any).env?.VITE_API_BASE || "";
+const BASE_URL = (import.meta as any).env?.VITE_API_BASE ?? "";
 
 export class ApiError extends Error {
-  status: number;
-  code: string | null;
-  constructor(status: number, code: string | null, message: string) {
-    super(message);
-    this.status = status;
-    this.code = code;
+  constructor(
+    public status: number,
+    public code: string,
+    public detail: string,
+    public body: ApiErrorBody,
+  ) {
+    super(`${code}: ${detail}`);
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+interface RequestOpts {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  body?: unknown;
+  formData?: FormData;
+  query?: Record<string, string | number | undefined>;
+  signal?: AbortSignal;
+  responseType?: "json" | "blob" | "text";
+}
+
+function _toUserMessage(status: number, body: ApiErrorBody | null): string {
+  if (status === 401) return "請重新登入";
+  if (status >= 500) return "服務異常，請稍後再試";
+  if (body?.detail) return body.detail;
+  return `錯誤 ${status}`;
+}
+
+async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
+  const url = new URL(BASE_URL + path, window.location.origin);
+  if (opts.query) {
+    for (const [k, v] of Object.entries(opts.query)) {
+      if (v !== undefined && v !== null) url.searchParams.append(k, String(v));
+    }
+  }
+
   const init: RequestInit = {
-    method,
-    headers: body instanceof FormData
-      ? {}
-      : { "Content-Type": "application/json" },
+    method: opts.method ?? "GET",
+    signal: opts.signal,
   };
-  if (body !== undefined) {
-    init.body = body instanceof FormData ? body : JSON.stringify(body);
+  if (opts.formData) {
+    init.body = opts.formData;
+  } else if (opts.body !== undefined) {
+    init.headers = { "Content-Type": "application/json" };
+    init.body = JSON.stringify(opts.body);
   }
-  const r = await fetch(`${BASE}${path}`, init);
-  if (!r.ok) {
-    let detail = r.statusText;
-    let code: string | null = null;
+
+  let resp: Response;
+  try {
+    resp = await fetch(url.toString(), init);
+  } catch (e) {
+    useToastStore.getState().push("error", "網路連線失敗");
+    throw e;
+  }
+
+  if (!resp.ok) {
+    let body: ApiErrorBody | null = null;
     try {
-      const j = await r.json();
-      detail = j.detail || detail;
-      code = j.code || null;
-    } catch { /* ignore */ }
-    throw new ApiError(r.status, code, detail);
+      const j = await resp.json();
+      body = j.detail && typeof j.detail === "object" ? (j.detail as ApiErrorBody) : null;
+    } catch {
+      // ignore
+    }
+    const code = body?.code ?? "http_error";
+    const detail = body?.detail ?? `HTTP ${resp.status}`;
+    useToastStore.getState().push("error", _toUserMessage(resp.status, body));
+    throw new ApiError(resp.status, code, detail, body ?? { code, detail });
   }
-  if (r.status === 204) return undefined as T;
-  return r.json();
+
+  if (opts.responseType === "blob") return (await resp.blob()) as unknown as T;
+  if (opts.responseType === "text") return (await resp.text()) as unknown as T;
+  if (resp.status === 204) return undefined as T;
+  return (await resp.json()) as T;
 }
 
 export const api = {
-  get:    <T = any>(path: string) => request<T>("GET", path),
-  post:   <T = any>(path: string, body?: unknown) => request<T>("POST", path, body),
-  put:    <T = any>(path: string, body?: unknown) => request<T>("PUT", path, body),
-  del:    <T = any>(path: string) => request<T>("DELETE", path),
-  upload: <T = any>(path: string, fd: FormData) => request<T>("POST", path, fd),
+  get: <T>(path: string, opts?: Omit<RequestOpts, "method" | "body" | "formData">) =>
+    request<T>(path, { ...opts, method: "GET" }),
+  post: <T>(path: string, body?: unknown, opts?: Omit<RequestOpts, "method" | "body">) =>
+    request<T>(path, { ...opts, method: "POST", body }),
+  postForm: <T>(path: string, formData: FormData, opts?: Omit<RequestOpts, "method" | "formData">) =>
+    request<T>(path, { ...opts, method: "POST", formData }),
+  patch: <T>(path: string, body?: unknown, opts?: Omit<RequestOpts, "method" | "body">) =>
+    request<T>(path, { ...opts, method: "PATCH", body }),
+  put: <T>(path: string, body?: unknown, opts?: Omit<RequestOpts, "method" | "body">) =>
+    request<T>(path, { ...opts, method: "PUT", body }),
+  del: <T>(path: string, opts?: Omit<RequestOpts, "method" | "body" | "formData">) =>
+    request<T>(path, { ...opts, method: "DELETE" }),
 };
-
-/** SSE helper for streaming endpoints (e.g., /api/admin/training/{id}/log). */
-export function sse(path: string, onMessage: (data: string) => void): () => void {
-  const es = new EventSource(`${BASE}${path}`);
-  es.onmessage = (e) => onMessage(e.data);
-  return () => es.close();
-}
