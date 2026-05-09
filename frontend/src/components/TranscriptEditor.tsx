@@ -50,10 +50,14 @@ export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
   const save = async () => {
     if (saving) return;
     if (!dirty) return;
+    // 凍結當下 frontend segments 當 snapshot；不依賴 backend 回的內容
+    // （backend round-trip 可能因 dict key order / 浮點精度差異使 JSON.stringify
+    // 不一致，導致 dirty 永遠 true）
+    const localSnapshot = segments;
     setSaving(true);
     try {
-      const updated = await jobsApi.patchSegments(job.id, segments);
-      markSaved(updated.segments ?? segments);
+      await jobsApi.patchSegments(job.id, localSnapshot);
+      markSaved(localSnapshot);
     } catch {
       // client.ts 已 toast
       setSaving(false);

@@ -55,8 +55,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   resizeSegment: (idx, start, end) => {
     const grid = 0.05;
     const snap = (v: number) => Math.round(v / grid) * grid;
-    const next = [...get().segments];
-    next[idx] = { ...next[idx], start_time: snap(start), end_time: snap(end) };
+    const segs = get().segments;
+    const cur = segs[idx];
+    if (!cur) return;
+    const newStart = snap(start);
+    const newEnd = snap(end);
+    // noop guard：值幾乎不變時不寫 store，避免 wavesurfer 加 region 時誤觸 dirty
+    if (
+      Math.abs(cur.start_time - newStart) < 1e-6 &&
+      Math.abs(cur.end_time - newEnd) < 1e-6
+    ) {
+      return;
+    }
+    const next = [...segs];
+    next[idx] = { ...cur, start_time: newStart, end_time: newEnd };
     set({ segments: next });
   },
   isDirty: () => JSON.stringify(get().segments) !== get().originalSnapshot,
