@@ -134,7 +134,7 @@ async def import_hotwords(
     """匯入 hotwords。Mode：append（與現有 list 取聯集，保留順序）/ replace（整批換）。"""
     if mode not in ("append", "replace"):
         raise http_error(
-            ErrorCode.INVALID_PROJECT,
+            ErrorCode.INVALID_METADATA,
             f"mode must be 'append' or 'replace', got {mode!r}",
         )
     project = await _get_or_404(db, project_id)
