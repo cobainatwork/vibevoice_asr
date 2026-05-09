@@ -117,3 +117,48 @@ export interface HotwordsImportResult {
   replaced: number;
   skipped_duplicates: number;
 }
+
+// ============================================================
+// Dataset (M3.5)
+// ============================================================
+
+export type ImportFormat = "json" | "xlsx" | "srt" | "txt";
+export type ExportFormat = "json" | "srt" | "xlsx";
+export type TemplateFormat = "json" | "xlsx" | "srt" | "txt";
+
+export type DatasetSource =
+  | "imported_xlsx"
+  | "imported_srt"
+  | "imported_txt"
+  | "imported_json"
+  | "from_transcription"
+  | "uploaded"
+  | "imported_csv"
+  | "imported_vtt";
+
+export interface DatasetSegment {
+  speaker: number; // 0-indexed
+  text: string;
+  start: number;
+  end: number;
+}
+
+export interface DatasetLabel {
+  audio_duration: number;
+  audio_path: string;
+  segments: DatasetSegment[];
+  customized_context: string[];
+}
+
+export interface DatasetItem {
+  id: number;
+  project_id: number;
+  audio_path: string;
+  label: DatasetLabel;
+  duration_sec: number;
+  source: DatasetSource;
+  source_job_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
