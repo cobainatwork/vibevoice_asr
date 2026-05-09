@@ -137,7 +137,20 @@ export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
               index={activeIdx}
               total={segments.length}
               speakerOptions={speakerOptions}
-              onChange={(p) => patchSegment(activeIdx, p)}
+              onChange={(p) => {
+                // 時間欄位（number input）走 resizeSegment 的 clamp 邏輯，
+                // 與 waveform 拖邊界共用同一邊界保護
+                if (p.start_time !== undefined || p.end_time !== undefined) {
+                  const cur = segments[activeIdx];
+                  resizeSegment(
+                    activeIdx,
+                    p.start_time ?? cur.start_time,
+                    p.end_time ?? cur.end_time,
+                  );
+                } else {
+                  patchSegment(activeIdx, p);
+                }
+              }}
             />
           )}
         </div>
