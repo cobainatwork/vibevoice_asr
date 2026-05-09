@@ -91,10 +91,10 @@ export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
           <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
             {saving
               ? <span className="inline-flex items-center gap-1 text-blue-600"><Loader2 className="w-3 h-3 animate-spin" /> 儲存中...</span>
-              : lastSavedAt
-              ? <span className="inline-flex items-center gap-1 text-green-600"><CheckCircle2 className="w-3 h-3" /> 已儲存於 {lastSavedAt.toLocaleTimeString("zh-TW")}</span>
               : dirty
               ? <span className="text-amber-600">有未儲存變更</span>
+              : lastSavedAt
+              ? <span className="inline-flex items-center gap-1 text-green-600"><CheckCircle2 className="w-3 h-3" /> 已儲存於 {lastSavedAt.toLocaleTimeString("zh-TW")}</span>
               : <span className="text-slate-500">無變更</span>
             }
           </p>
