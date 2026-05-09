@@ -1,0 +1,105 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: vibevoice-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ./data/redis:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  vllm:
+    image: ${VLLM_DOCKER_IMAGE:-vllm/vllm-openai:v0.14.1}
+    container_name: vibevoice-vllm
+    profiles: ["manual"]   # 由 backend 控制啟停
+    ipc: host
+    ports:
+      - "8000:8000"
+    environment:
+      - VIBEVOICE_FFMPEG_MAX_CONCURRENCY=64
+      - PYTORCH_ALLOC_CONF=expandable_segments:True
+    volumes:
+      - ./vendor/VibeVoice:/app
+      - ${HF_CACHE_HOST:-./data/hf_cache}:/root/.cache/huggingface
+      - ./data/merged:/merged
+    working_dir: /app
+    entrypoint: ["bash", "-c"]
+    command: ["python3 /app/vllm_plugin/scripts/start_server.py"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: vibevoice-backend
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      - BACKEND_DB_URL=sqlite:////data/app.db
+      - BACKEND_DATA_DIR=/data
+      - REDIS_URL=redis://redis:6379/0
+      - VLLM_BASE_URL=http://host.docker.internal:8000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+      - ./vendor/VibeVoice:/vendor/VibeVoice:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    command: ["arq", "app.worker.WorkerSettings"]
+    env_file:
+      - .env
+    environment:
+      - BACKEND_DB_URL=sqlite:////data/app.db
+      - BACKEND_DATA_DIR=/data
+      - REDIS_URL=redis://redis:6379/0
+      - VLLM_BASE_URL=http://host.docker.internal:8000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+      - ./vendor/VibeVoice:/vendor/VibeVoice:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/frontend.Dockerfile
+    container_name: vibevoice-frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    environment:
+      - VITE_API_BASE=http://localhost:${BACKEND_PORT:-8080}
+    restart: unless-stopped

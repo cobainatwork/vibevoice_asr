@@ -1,0 +1,58 @@
+# Data and runtime artifacts
+data/
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+poetry.lock
+!backend/poetry.lock
+
+# Node
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+*.whl
+build/
+
+# Claude Code local settings (per-machine, do not commit)
+.claude/
+
+# Vendor (upstream clone)
+# Default: NOT ignored — keep self-contained repo (≈ 272 MB)
+# To exclude (smaller repo, requires internet on first setup): uncomment below
+# vendor/VibeVoice/
