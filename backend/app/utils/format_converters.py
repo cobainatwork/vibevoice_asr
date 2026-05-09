@@ -10,8 +10,6 @@ M3.5 milestone.
 """
 from __future__ import annotations
 
-from typing import Any
-
 
 def segments_to_srt(segments: list[dict]) -> str:
     """Render segments as SubRip (.srt) text. Speakers as 'Speaker N:' prefix."""

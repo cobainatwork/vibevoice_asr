@@ -8,24 +8,24 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
-    Enum as SAEnum,
     Float,
     ForeignKey,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
 )
+from sqlalchemy import (
+    Enum as SAEnum,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
-
 
 # ============================================================
 # Enums

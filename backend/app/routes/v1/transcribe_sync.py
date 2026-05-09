@@ -8,7 +8,7 @@ M6 milestone.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
+from fastapi import APIRouter, File, Form, Header, UploadFile
 
 from app.schemas import V1SyncResultOut
 

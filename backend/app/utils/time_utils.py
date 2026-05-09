@@ -34,13 +34,14 @@ def seconds_to_hms(seconds: float, with_ms: bool = True) -> str:
     """
     if with_ms:
         total_cs = int(round(seconds * 100))
-        h, rem = divmod(total_cs, 360_000)
-        m, rem = divmod(rem, 6_000)
-        s, cs = divmod(rem, 100)
-        return f"{h:02d}:{m:02d}:{s:02d}.{cs:02d}"
-    h, rem = divmod(seconds, 3600)
-    m, s = divmod(rem, 60)
-    return f"{int(h):02d}:{int(m):02d}:{int(s):02d}"
+        h_cs, rem_cs = divmod(total_cs, 360_000)
+        m_cs, rem_cs = divmod(rem_cs, 6_000)
+        s_cs, cs = divmod(rem_cs, 100)
+        return f"{h_cs:02d}:{m_cs:02d}:{s_cs:02d}.{cs:02d}"
+    total_s = int(seconds)
+    h_int, rem_int = divmod(total_s, 3600)
+    m_int, s_int = divmod(rem_int, 60)
+    return f"{h_int:02d}:{m_int:02d}:{s_int:02d}"
 
 
 _SRT_RE = re.compile(r"^(\d+):(\d+):(\d+)[,.](\d+)$")

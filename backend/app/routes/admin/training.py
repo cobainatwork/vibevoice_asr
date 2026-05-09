@@ -7,7 +7,6 @@ M4 milestone.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db

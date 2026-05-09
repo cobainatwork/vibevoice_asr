@@ -7,7 +7,6 @@ M3.5 milestone.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db

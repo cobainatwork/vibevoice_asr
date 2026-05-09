@@ -8,7 +8,7 @@ M6 milestone.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Header
 
 from app.schemas import V1JobResultOut, V1JobStatusOut
 

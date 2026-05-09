@@ -12,20 +12,13 @@ Flow:
 """
 from __future__ import annotations
 
-import json
 import logging
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket
 
 from app.constants import (
-    WS_CLOSE_AUTH_FAILED,
-    WS_CLOSE_BAD_REQUEST,
     WS_CLOSE_INTERNAL_ERROR,
-    WS_CLOSE_UPLOAD_TIMEOUT,
-    WsClientMsg,
-    WsServerMsg,
 )
-from app.errors import ErrorCode
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

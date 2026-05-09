@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime
 
 from app.config import get_settings
 from app.errors import AppError, ErrorCode

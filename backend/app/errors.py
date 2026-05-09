@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+from fastapi import HTTPException
+
 
 class ErrorCode(str, Enum):
     # === Authentication / Authorization ===
@@ -129,7 +131,7 @@ class AppError(Exception):
 
 def http_error(
     code: ErrorCode, detail: str, status: int | None = None
-) -> "HTTPException":
+) -> HTTPException:
     """
     Build an HTTPException with structured `{code, detail}` body.
 
@@ -137,7 +139,6 @@ def http_error(
     Routes 用此 helper 取代手寫 `HTTPException(..., detail={...})`，
     保持 v1 / admin 端錯誤格式一致。
     """
-    from fastapi import HTTPException
     return HTTPException(
         status_code=status or HTTP_STATUS_FOR_CODE.get(code, 500),
         detail={"code": code.value, "detail": detail},

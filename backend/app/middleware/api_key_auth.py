@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from fastapi import Header, Request
 
-from app.errors import AppError, ErrorCode
-
 
 async def require_api_key(
     request: Request,

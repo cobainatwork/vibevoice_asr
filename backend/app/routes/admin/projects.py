@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Literal
 
 from fastapi import APIRouter, Body, Depends, File, Form, UploadFile
 from fastapi.responses import PlainTextResponse
@@ -193,9 +192,9 @@ async def _flush_or_409(db: AsyncSession, *, name: str | None) -> None:
     """Flush；name 衝突轉 409 PROJECT_NAME_CONFLICT。"""
     try:
         await db.flush()
-    except IntegrityError:
+    except IntegrityError as e:
         await db.rollback()
         raise http_error(
             ErrorCode.PROJECT_NAME_CONFLICT,
             f"project name {name!r} already exists" if name else "name conflict",
-        )
+        ) from e

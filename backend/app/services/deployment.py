@@ -156,6 +156,7 @@ _STRATEGIES = {
 
 def make_strategy() -> DeploymentStrategy:
     """Factory based on env DEPLOYMENT_PROFILE."""
+    from typing import cast
     profile = get_settings().deployment_profile
     cls = _STRATEGIES.get(profile)
     if cls is None:
@@ -163,4 +164,4 @@ def make_strategy() -> DeploymentStrategy:
             f"Unknown DEPLOYMENT_PROFILE={profile!r}. "
             f"Valid: {list(_STRATEGIES.keys())}"
         )
-    return cls()
+    return cast(DeploymentStrategy, cls())

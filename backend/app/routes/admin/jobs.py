@@ -182,7 +182,7 @@ def _probe_or_cleanup(audio_path: Path) -> float:
             audio_path.parent.rmdir()
         except OSError:
             pass
-        raise http_error(e.code, e.detail)
+        raise http_error(e.code, e.detail) from e
 
 
 def _validate_duration(duration: float, settings: Settings) -> None:

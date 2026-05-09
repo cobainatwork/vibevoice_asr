@@ -32,7 +32,6 @@ from app.constants import (
     REPETITION_MIN_SUBSTRING_LEN,
     REPETITION_WINDOW_CHARS,
     RETRY_TEMPERATURES,
-    SHOW_KEYS,
     SYSTEM_PROMPT,
     build_user_prompt,
 )
@@ -127,7 +126,7 @@ class VllmClient:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 async with client.stream("POST", url, json=payload) as resp:
-                    self._raise_for_bad_status(resp)
+                    await self._raise_for_bad_status(resp)
                     async for line in resp.aiter_lines():
                         content = self._extract_sse_content(line)
                         if content is None:

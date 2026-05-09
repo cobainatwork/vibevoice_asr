@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
 
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings

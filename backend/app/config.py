@@ -11,7 +11,6 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 DeploymentProfileT = Literal["single", "single-large", "dual-split", "dual-tp", "multi"]
 
 

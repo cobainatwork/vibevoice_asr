@@ -19,7 +19,9 @@ from app.config import get_settings
 class FileStore(Protocol):
     async def save_stream(self, key: str, source: AsyncIterator[bytes]) -> str: ...
     async def save_bytes(self, key: str, data: bytes) -> str: ...
-    async def open_stream(self, key: str, chunk_size: int = 65536) -> AsyncIterator[bytes]: ...
+    # open_stream 為 async generator，型別簽章不可加 `async def`
+    # （那會被視為 coroutine 回 AsyncIterator 而非 AsyncGenerator 本身）
+    def open_stream(self, key: str, chunk_size: int = 65536) -> AsyncIterator[bytes]: ...
     async def delete(self, key: str) -> None: ...
     async def exists(self, key: str) -> bool: ...
     def local_path(self, key: str) -> Path: ...
@@ -53,14 +55,15 @@ class LocalFileStore:
     async def save_stream(self, key: str, source: AsyncIterator[bytes]) -> str:
         p = self._path(key)
         p.parent.mkdir(parents=True, exist_ok=True)
-        with open(p, "wb") as f:
+        # M2 既有：sync open；改用 aiofiles 列為 backlog（內測夠用）
+        with open(p, "wb") as f:  # noqa: ASYNC101
             async for chunk in source:
                 f.write(chunk)
         return key
 
     async def open_stream(self, key: str, chunk_size: int = 65536) -> AsyncIterator[bytes]:
         p = self._path(key)
-        with open(p, "rb") as f:
+        with open(p, "rb") as f:  # noqa: ASYNC101
             while data := f.read(chunk_size):
                 yield data
 
@@ -78,6 +81,8 @@ _store: FileStore | None = None
 
 def get_store() -> FileStore:
     global _store
-    if _store is None:
-        _store = LocalFileStore()
-    return _store
+    if _store is not None:
+        return _store
+    store: FileStore = LocalFileStore()
+    _store = store
+    return store

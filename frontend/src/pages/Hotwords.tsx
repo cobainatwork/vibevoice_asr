@@ -50,7 +50,7 @@ export default function Hotwords() {
     const a = document.createElement("a");
     a.href = url;
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const safe = (project?.name ?? "project").replace(/[^\w\-]/g, "-");
+    const safe = (project?.name ?? "project").replace(/[^\w-]/g, "-");
     a.download = `hotwords-${safe}-${today}.txt`;
     a.click();
     URL.revokeObjectURL(url);

@@ -36,11 +36,11 @@ def parse_time(value: Any) -> float:
     Parse time as float seconds or hh:mm:ss[.ms] or mm:ss[.ms].
     Raises AppError(IMPORT_INVALID_TIME) on bad input.
     """
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     s = str(value).strip()
     if not s:
-        raise AppError(ErrorCode.IMPORT_INVALID_TIME, f"Empty time")
+        raise AppError(ErrorCode.IMPORT_INVALID_TIME, "Empty time")
     # Try plain float first
     try:
         return float(s)
@@ -67,7 +67,7 @@ def parse_speaker(value: Any) -> int:
     NOTE: returned value is the value the USER provided semantically. Caller
     should normalize to 0-indexed for training JSON output.
     """
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return int(value)
     s = str(value).strip()
     if s.isdigit():

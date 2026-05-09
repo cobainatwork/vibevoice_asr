@@ -21,9 +21,7 @@ from app.models import (
     JobStatus,
     ModelType,
     TrainingStatus,
-    WebhookDeliveryStatus,
 )
-
 
 # ============================================================
 # Common

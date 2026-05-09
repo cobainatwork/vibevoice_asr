@@ -7,7 +7,6 @@ See SPEC.md §7.5.7.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -52,7 +51,7 @@ async def is_vllm_running() -> bool:
     settings = get_settings()
     try:
         c = _client().containers.get(settings.vllm_container_name)
-        return c.status == "running"
+        return bool(c.status == "running")
     except NotFound:
         return False
 

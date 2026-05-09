@@ -124,7 +124,7 @@ def _extract_json_object(text: str) -> str | None:
 
 def _to_seconds(value: Any) -> float:
     """Convert time str or number to float seconds."""
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     s = str(value).strip()
     # plain number
