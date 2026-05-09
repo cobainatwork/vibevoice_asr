@@ -166,6 +166,10 @@ class JobCreatedOut(BaseModel):
     job_id: str
 
 
+class SegmentsPatchIn(BaseModel):
+    segments: list[Segment]
+
+
 # ============================================================
 # Dataset
 # ============================================================

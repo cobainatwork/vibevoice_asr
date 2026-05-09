@@ -21,7 +21,7 @@ from app.constants import guess_mime
 from app.db import get_db
 from app.errors import AppError, ErrorCode, http_error
 from app.models import Job, JobSource, JobStatus, Project
-from app.schemas import JobCreatedOut, JobOut
+from app.schemas import JobCreatedOut, JobOut, Segment, SegmentsPatchIn
 from app.services.queue import enqueue_transcribe
 from app.utils.audio import get_duration_sec
 
@@ -117,6 +117,21 @@ async def stream_audio(job_id: str, db: AsyncSession = Depends(get_db)):
         media_type=guess_mime(job.filename),
         filename=job.filename,
     )
+
+
+@router.patch("/jobs/{job_id}/segments", response_model=JobOut)
+async def patch_segments(
+    job_id: str,
+    payload: SegmentsPatchIn,
+    db: AsyncSession = Depends(get_db),
+):
+    """更新 Job.segments（用於 TranscriptEditor 自動儲存）。"""
+    job = await _get_job_or_404(db, job_id)
+    _validate_segments(payload.segments)
+    job.segments = [s.model_dump() for s in payload.segments]
+    await db.flush()
+    await db.refresh(job)
+    return job
 
 
 # === Helpers — upload pipeline ===
@@ -224,6 +239,35 @@ async def _get_job_or_404(db: AsyncSession, job_id: str) -> Job:
             ErrorCode.JOB_NOT_FOUND, f"job {job_id} not found"
         )
     return job
+
+
+def _validate_segments(segments: list[Segment]) -> None:
+    if not segments:
+        raise http_error(
+            ErrorCode.INVALID_SEGMENTS, "segments must not be empty"
+        )
+    last_end = -1.0
+    for i, s in enumerate(segments):
+        if s.start_time >= s.end_time:
+            raise http_error(
+                ErrorCode.INVALID_SEGMENTS,
+                f"segment[{i}] start ({s.start_time}) >= end ({s.end_time})",
+            )
+        if s.start_time < last_end:
+            raise http_error(
+                ErrorCode.INVALID_SEGMENTS,
+                f"segment[{i}] overlaps previous (start {s.start_time} < prev end {last_end})",
+            )
+        if s.speaker_id < 1:
+            raise http_error(
+                ErrorCode.INVALID_SEGMENTS,
+                f"segment[{i}] speaker_id must be >= 1, got {s.speaker_id}",
+            )
+        if not s.text.strip():
+            raise http_error(
+                ErrorCode.INVALID_SEGMENTS, f"segment[{i}] text is empty"
+            )
+        last_end = s.end_time
 
 
 def _cleanup_audio_files(job: Job) -> None:
