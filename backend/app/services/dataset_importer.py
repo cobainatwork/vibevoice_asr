@@ -217,7 +217,7 @@ def import_label(
         segments = parse_json(label_path)
     elif format == "xlsx":
         segments = parse_xlsx(label_path)
-    elif format == "srt":
+    else:  # srt（前面 set 已 guard，此處為 exhaustive 收口）
         segments = parse_srt(label_path)
     validate_segments(segments, audio_duration)
     return {
