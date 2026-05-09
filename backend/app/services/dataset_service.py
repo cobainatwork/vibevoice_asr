@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import UploadFile
+from mutagen import File as MutagenFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -182,16 +183,15 @@ async def create_from_import(
 
 
 async def _stream_to_tempfile(upload: UploadFile) -> Path:
-    """Stream UploadFile 到臨時檔，回傳 path。caller 負責 unlink。"""
+    """Stream UploadFile 到臨時檔，回傳 path。caller 負責 unlink。
+
+    持有單一 file handle（與 LocalFileStore.save_stream 相同 pattern），
+    避免大檔（>100 MB）每 chunk 重 open 造成 syscall 倍數放大。
+    """
     fd, name = tempfile.mkstemp(suffix=Path(upload.filename or "").suffix)
-    os.close(fd)
     p = Path(name)
-    p.write_bytes(b"")  # 確保檔案存在且為空
-    while True:
-        chunk = await upload.read(65536)
-        if not chunk:
-            break
-        with open(p, "ab") as f:  # noqa: ASYNC101
+    with os.fdopen(fd, "wb") as f:  # noqa: ASYNC101
+        while chunk := await upload.read(65536):
             f.write(chunk)
     return p
 
@@ -210,8 +210,6 @@ def _silent_unlink(p: Path) -> None:
 def _probe_audio_duration(path: Path) -> float:
     """用 mutagen 取秒數。失敗 → AUDIO_DURATION_FAILED。"""
     try:
-        from mutagen import File as MutagenFile
-
         f = MutagenFile(str(path))
         if f is None or not getattr(f, "info", None) or not getattr(f.info, "length", None):
             raise ValueError("no info")

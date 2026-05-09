@@ -21,7 +21,7 @@ from app.services import dataset_service
 
 @pytest_asyncio.fixture
 async def project(db_session: AsyncSession) -> Project:
-    p = Project(name="t", hotwords=[])
+    p = Project(name="t", hotwords=["糖尿病", "胰島素"])
     db_session.add(p)
     await db_session.commit()
     return p
@@ -148,7 +148,9 @@ async def test_create_from_import_xlsx(db_session, project, tmp_path, monkeypatc
     assert item.audio_path == f"datasets/{item.id}/audio.wav"
     assert (tmp_path / item.audio_path).read_bytes() == _make_wav_bytes(1.0)
     assert item.label["segments"][0]["speaker"] == 0
-    assert item.label["customized_context"] == project.hotwords
+    assert item.label["customized_context"] == ["糖尿病", "胰島素"]
+    # 必須是 deep-copy（service 用 list(project.hotwords or [])）— 改 project 不影響 dataset
+    assert item.label["customized_context"] is not project.hotwords
     assert item.duration_sec == pytest.approx(1.0, abs=0.05)
     fs._store = None  # cleanup
 
