@@ -1,0 +1,57 @@
+# ============================================================
+# Docker build context exclusions
+# 適用所有 build context = repo root 的 image（backend / frontend）
+# 目的：避免把 vendor/（>1GB）、data/、各層 cache 打進 build context
+# ============================================================
+
+# Git / VCS
+.git
+.gitignore
+.gitattributes
+.github/
+
+# Vendor / data — runtime 透過 volume mount 注入，image 內不需要
+vendor/
+data/
+
+# Claude 開發工具產物
+.claude/
+.playwright-mcp/
+
+# Python caches & venvs
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+
+# Node
+**/node_modules/
+frontend/dist/
+
+# OS / 編輯器
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Local DB / logs
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Local env — 絕不打包（含 secret）
+.env
+.env.local
+.env.*.local
+
+# 測試 / 開發產物
+.coverage
+htmlcov/
+*.egg-info/
