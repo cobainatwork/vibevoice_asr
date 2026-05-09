@@ -70,6 +70,11 @@ class ErrorCode(str, Enum):
     IMPORT_INVALID_TIME = "import_invalid_time"
     IMPORT_PARSE_FAILED = "import_parse_failed"
 
+    # === Dataset errors ===
+    DATASET_NOT_FOUND = "dataset_not_found"
+    INVALID_JOB_STATE = "invalid_job_state"
+    AUDIO_DURATION_FAILED = "audio_duration_failed"
+
     # === Generic ===
     INTERNAL_ERROR = "internal_error"
 
@@ -106,6 +111,9 @@ HTTP_STATUS_FOR_CODE: dict[ErrorCode, int] = {
     ErrorCode.IMPORT_MISSING_COLUMNS: 400,
     ErrorCode.IMPORT_INVALID_TIME: 400,
     ErrorCode.IMPORT_PARSE_FAILED: 400,
+    ErrorCode.DATASET_NOT_FOUND: 404,
+    ErrorCode.INVALID_JOB_STATE: 400,
+    ErrorCode.AUDIO_DURATION_FAILED: 400,
     ErrorCode.INTERNAL_ERROR: 500,
 }
 

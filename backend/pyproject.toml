@@ -43,6 +43,7 @@ openpyxl = "^3.1.2"
 pandas = "^2.2.0"
 pysrt = "^1.1.2"
 webvtt-py = "^0.5.1"
+mutagen = "^1.47"
 
 # Docker control
 docker = "^7.0.0"

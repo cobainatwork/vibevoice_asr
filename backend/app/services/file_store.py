@@ -24,6 +24,7 @@ class FileStore(Protocol):
     def open_stream(self, key: str, chunk_size: int = 65536) -> AsyncIterator[bytes]: ...
     async def delete(self, key: str) -> None: ...
     async def exists(self, key: str) -> bool: ...
+    async def copy(self, src_key: str, dst_key: str) -> str: ...
     def local_path(self, key: str) -> Path: ...
 
 
@@ -73,6 +74,13 @@ class LocalFileStore:
             shutil.rmtree(p, ignore_errors=True)
         elif p.exists():
             p.unlink()
+
+    async def copy(self, src_key: str, dst_key: str) -> str:
+        src = self._path(src_key)
+        dst = self._path(dst_key)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        return dst_key
 
 
 # Singleton
