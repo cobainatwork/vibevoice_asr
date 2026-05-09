@@ -2,6 +2,4 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif;
-}
+html { font-family: Inter, system-ui, sans-serif; }
