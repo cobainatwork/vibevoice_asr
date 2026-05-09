@@ -246,6 +246,11 @@ async def create_from_job(
             ErrorCode.INVALID_JOB_STATE,
             f"Job {job_id} is in {job.status.value}, expected done",
         )
+    if job.duration_sec is None or job.duration_sec <= 0:
+        raise AppError(
+            ErrorCode.INVALID_JOB_STATE,
+            f"Job {job_id} has no duration; cannot build dataset",
+        )
 
     project = await db.get(Project, job.project_id)
     project_hotwords = list(project.hotwords or []) if project else []
@@ -253,18 +258,22 @@ async def create_from_job(
     # job.segments 為內部 1-indexed dict list（admin TranscriptEditor 格式）
     raw_segments = list(job.segments or [])
     ext = _ext(job.audio_path)
+    out_segments = [
+        {
+            "speaker": max(0, int(s["speaker_id"]) - 1),  # 1-indexed → 0-indexed
+            "text": s["text"],
+            "start": s["start_time"],
+            "end": s["end_time"],
+        }
+        for s in raw_segments
+    ]
+    # 與 create_from_import 對稱：from_job 也走 validate_segments 防 vLLM 輸出髒資料
+    dataset_importer.validate_segments(out_segments, job.duration_sec)
+
     label = {
         "audio_duration": job.duration_sec,
         "audio_path": f"audio.{ext}",
-        "segments": [
-            {
-                "speaker": max(0, int(s["speaker_id"]) - 1),  # 1-indexed → 0-indexed
-                "text": s["text"],
-                "start": s["start_time"],
-                "end": s["end_time"],
-            }
-            for s in raw_segments
-        ],
+        "segments": out_segments,
         "customized_context": project_hotwords,
     }
 
@@ -272,7 +281,7 @@ async def create_from_job(
         project_id=job.project_id,
         audio_path="",
         label=label,
-        duration_sec=job.duration_sec or 0.0,
+        duration_sec=job.duration_sec,
         source=DatasetSource.FROM_TRANSCRIPTION,
         source_job_id=job.id,
         notes=notes,
