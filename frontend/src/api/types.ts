@@ -1,10 +1,38 @@
-/**
- * TypeScript types matching backend schemas.py.
- *
- * Keep in sync with backend/app/schemas.py.
- */
+// 與 backend/app/schemas.py 對齊
+// 變更時兩邊必須同步
 
-export interface Project {
+// === Common ===
+
+export interface Segment {
+  start_time: number;
+  end_time: number;
+  speaker_id: number;
+  text: string;
+}
+
+export interface ApiErrorBody {
+  code: string;
+  detail: string;
+  [key: string]: unknown;
+}
+
+// === Project ===
+
+export interface ProjectIn {
+  name: string;
+  description?: string;
+  hotwords?: string[];
+  webhook_url?: string;
+}
+
+export interface ProjectPatch {
+  name?: string;
+  description?: string;
+  hotwords?: string[];
+  webhook_url?: string;
+}
+
+export interface ProjectOut {
   id: number;
   name: string;
   description: string | null;
@@ -15,17 +43,12 @@ export interface Project {
   updated_at: string;
 }
 
-export interface Segment {
-  start_time: number;
-  end_time: number;
-  speaker_id: number;  // 1-indexed
-  text: string;
-}
+// === Job ===
 
 export type JobStatus = "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
 export type JobSource = "admin_upload" | "v1_api_async" | "v1_api_sync" | "v1_api_ws";
 
-export interface Job {
+export interface JobOut {
   id: string;
   project_id: number;
   source: JobSource;
@@ -47,122 +70,50 @@ export interface Job {
   finished_at: string | null;
 }
 
-export type DatasetSource =
-  | "uploaded"
-  | "from_transcription"
-  | "imported_xlsx"
-  | "imported_csv"
-  | "imported_srt"
-  | "imported_vtt"
-  | "imported_txt"
-  | "imported_json";
-
-export interface DatasetItem {
-  id: number;
-  project_id: number;
-  audio_path: string;
-  label: TrainingLabel;
-  duration_sec: number;
-  source: DatasetSource;
-  source_job_id: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
+export interface JobCreatedOut {
+  job_id: string;
 }
 
-/** Canonical training JSON format (0-indexed speaker). See SPEC.md §9.1. */
-export interface TrainingLabel {
-  audio_duration: number;
-  audio_path: string;
-  segments: TrainingSegment[];
-  customized_context?: string[];
+// === System ===
+
+export interface HealthOut {
+  ok: boolean;
+  vllm_status: string;
+  redis_status: string;
+  db_status: string;
 }
 
-export interface TrainingSegment {
-  speaker: number;   // 0-indexed
-  text: string;
-  start: number;
-  end: number;
+export interface VllmStatusOut {
+  status: string;
+  model: string | null;
+  uptime_sec: number | null;
 }
 
-export type TrainingStatus =
-  | "pending"
-  | "preparing"
-  | "training"
-  | "merging"
-  | "done"
-  | "failed"
-  | "cancelled";
-
-export interface TrainingHyperparams {
-  lora_r: number;
-  lora_alpha: number;
-  lora_dropout: number;
-  lr: number;
-  epochs: number;
-  batch_size: number;
-  grad_accum: number;
-  warmup_ratio: number;
-  weight_decay: number;
-  max_audio_length: number | null;
+export interface ProfileOut {
+  profile: string;
+  gpu_inference_devices: string;
+  gpu_training_devices: string;
+  tensor_parallel: number;
+  data_parallel: number;
+  max_concurrent_requests: number;
+  can_concurrent_train: boolean;
+  mock_vllm: boolean;
 }
 
-export interface TrainingRun {
-  id: string;
-  project_id: number;
-  status: TrainingStatus;
-  hyperparams: TrainingHyperparams;
-  dataset_item_ids: number[];
-  output_path: string | null;
-  merged_path: string | null;
-  log_path: string;
-  metrics: Record<string, unknown> | null;
-  error: string | null;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
+export interface QueueInfo {
+  pending: number;
+  running: number;
+  workers: number;
+  oldest_age_sec: number;
 }
 
-export type ModelType = "base" | "merged" | "lora";
+// === Hotwords I/O ===
 
-export interface ModelVersion {
-  id: number;
-  project_id: number | null;
-  name: string;
-  type: ModelType;
-  path: string;
-  training_run_id: string | null;
-  size_gb: number | null;
-  created_at: string;
-}
+export type HotwordsImportMode = "append" | "replace";
 
-export interface ApiKey {
-  id: number;
-  project_id: number;
-  name: string;
-  key_prefix: string;
-  is_active: boolean;
-  created_at: string;
-  last_used_at: string | null;
-  expires_at: string | null;
-}
-
-export interface ApiKeyCreated extends ApiKey {
-  /** Plain key — only returned at create/rotate time. */
-  key: string;
-}
-
-export interface IntegrationCall {
-  id: number;
-  api_key_id: number | null;
-  project_id: number;
-  job_id: string | null;
-  endpoint: string;
-  method: string;
-  status_code: number;
-  duration_ms: number;
-  source_ip: string | null;
-  user_agent: string | null;
-  error: string | null;
-  created_at: string;
+export interface HotwordsImportResult {
+  hotwords: string[];
+  added: number;
+  replaced: number;
+  skipped_duplicates: number;
 }
