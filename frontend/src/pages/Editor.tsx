@@ -1,30 +1,28 @@
-/**
- * Correction workbench — central UX of the platform.
- *
- * See SPEC.md §8.3.6.
- * M3 milestone.
- */
-import { useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
+import { TranscriptViewer } from "../components/TranscriptViewer";
 import { TranscriptEditor } from "../components/TranscriptEditor";
+import { jobsApi } from "../api/jobs";
+import type { JobOut } from "../api/types";
 
 export default function Editor() {
   const { id, itemId } = useParams();
-  // TODO(M3):
-  // 1. Load DatasetItem via datasetsApi.get(itemId)
-  // 2. Convert label.segments (0-indexed speaker) → internal Segment (1-indexed)
-  // 3. Pass audio URL = datasetsApi.audioUrl(itemId)
-  // 4. On save: convert back to TrainingLabel and PUT
-  return (
-    <div className="space-y-4 max-w-5xl">
-      <h1 className="text-xl font-bold">校正工作台</h1>
-      <div className="text-sm text-gray-500">
-        Project #{id} · Dataset Item #{itemId}
-      </div>
-      <TranscriptEditor
-        audioUrl=""
-        segments={[]}
-        onChange={() => { /* TODO(M3) */ }}
-      />
-    </div>
-  );
+  const [params] = useSearchParams();
+  const mode = params.get("mode") === "edit" ? "edit" : "view";
+  const [job, setJob] = useState<JobOut | null>(null);
+
+  useEffect(() => {
+    if (!itemId) return;
+    jobsApi.get(itemId).then(setJob);
+  }, [itemId]);
+
+  if (!job) return <div className="p-6">載入中...</div>;
+  if (job.status !== "done") return <div className="p-6 text-amber-700">Job 尚未完成（{job.status}），無法檢視 transcript</div>;
+
+  const audioUrl = jobsApi.audioUrl(job.id);
+  const projectId = Number(id);
+
+  return mode === "edit"
+    ? <TranscriptEditor job={job} audioUrl={audioUrl} projectId={projectId} />
+    : <TranscriptViewer job={job} audioUrl={audioUrl} projectId={projectId} />;
 }
