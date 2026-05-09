@@ -1,0 +1,9 @@
+{
+  "audio_duration": 7.20,
+  "audio_path": "audio.wav",
+  "segments": [
+    {"speaker": 0, "text": "各位早安，今天我們要討論糖尿病", "start": 0.0, "end": 3.45},
+    {"speaker": 1, "text": "是的，胰島素分泌不足是主因", "start": 3.45, "end": 7.20}
+  ],
+  "customized_context": ["糖尿病", "胰島素"]
+}
