@@ -87,9 +87,46 @@ def parse_speaker(value: Any) -> int:
 
 
 def parse_xlsx(label_path: Path) -> list[dict]:
-    """Parse Excel file. Returns list of segments in TRAINING JSON format (0-indexed)."""
-    # TODO(M3.5): use openpyxl
-    raise NotImplementedError
+    """
+    Parse Excel file. 第一個 sheet，header 必須含
+    start_time / end_time / speaker / text（順序不限）。
+    回傳 list[{start, end, speaker, text}]，speaker 已 0-indexed。
+    """
+    from openpyxl import load_workbook
+
+    wb = load_workbook(label_path, read_only=True, data_only=True)
+    ws = wb.active
+    if ws is None:
+        raise AppError(ErrorCode.IMPORT_PARSE_FAILED, "No active sheet")
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        raise AppError(ErrorCode.IMPORT_PARSE_FAILED, "Empty xlsx")
+
+    header = [str(c).strip().lower() if c is not None else "" for c in rows[0]]
+    required = ("start_time", "end_time", "speaker", "text")
+    missing = [k for k in required if k not in header]
+    if missing:
+        raise AppError(
+            ErrorCode.IMPORT_PARSE_FAILED, f"Missing column(s): {missing}"
+        )
+    idx = {k: header.index(k) for k in required}
+
+    out: list[dict] = []
+    for row in rows[1:]:
+        if not row or all(v is None for v in row):
+            continue
+        try:
+            start = parse_time(row[idx["start_time"]])
+            end = parse_time(row[idx["end_time"]])
+        except AppError:
+            raise  # IMPORT_INVALID_TIME 直接往上拋
+        speaker = parse_speaker(row[idx["speaker"]])
+        text_val = row[idx["text"]]
+        text = "" if text_val is None else str(text_val).strip()
+        if not text:
+            continue
+        out.append({"start": start, "end": end, "speaker": speaker, "text": text})
+    return out
 
 
 def parse_csv(label_path: Path) -> list[dict]:
