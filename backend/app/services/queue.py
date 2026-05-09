@@ -6,10 +6,12 @@ See SPEC.md §7.5.2.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
+from arq.constants import default_queue_name
 
 from app.config import get_settings
 
@@ -55,7 +57,26 @@ async def enqueue_webhook(delivery_id: int, delay_sec: int = 0) -> int:
 
 
 async def queue_depth() -> dict[str, int]:
-    """Return rough queue stats for /api/admin/system/queue."""
+    """
+    Return rough queue stats for /api/admin/system/queue.
+
+    Arq queue 是 Redis sorted set，score = enqueue timestamp（ms）。
+    pending = ZCARD；oldest_age_sec 從最小 score 換算。
+    running / workers 在 M7 才接 arq.workers_status；M2 先回 0。
+    """
     pool = await get_pool()
-    # TODO: arq exposes .queued_jobs etc. — wire properly in M2
-    return {"pending": 0, "running": 0, "workers": 0, "oldest_age_sec": 0}
+    pending = await pool.zcard(default_queue_name)
+    oldest_age_sec = 0
+    if pending > 0:
+        head = await pool.zrange(
+            default_queue_name, 0, 0, withscores=True
+        )
+        if head:
+            _, score_ms = head[0]
+            oldest_age_sec = int(max(0, time.time() - float(score_ms) / 1000))
+    return {
+        "pending": int(pending),
+        "running": 0,
+        "workers": 0,
+        "oldest_age_sec": oldest_age_sec,
+    }

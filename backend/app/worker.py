@@ -24,21 +24,18 @@ logger = logging.getLogger(__name__)
 
 async def transcribe_job(ctx: dict, job_id: str) -> str:
     """
-    Process an offline transcription job.
+    Process an offline transcription job. Delegates to job_runner.run_transcribe.
 
-    Steps:
-      1. Load Job from DB
-      2. ffprobe duration; split if > AUTO_SPLIT_THRESHOLD_SEC
-      3. For each chunk: vllm_client.transcribe()
-      4. merge_chunk_results
-      5. Save segments to DB; status=DONE
-      6. If Job.callback_url or project.webhook_url: enqueue webhook_delivery_job
-
-    See app/services/job_runner.py for actual implementation.
+    M2：整段直接送，無切段、無 webhook。
+    M5：加長音檔切段（audio_splitter）。
+    M6：加 webhook 觸發。
     """
-    # TODO(M2): implement
+    from app.services.job_runner import run_transcribe
+
     logger.info("transcribe_job started: %s", job_id)
-    raise NotImplementedError("transcribe_job — implement in M2 (see SPEC.md §14)")
+    await run_transcribe(job_id)
+    logger.info("transcribe_job finished: %s", job_id)
+    return job_id
 
 
 async def training_job(ctx: dict, run_id: str) -> str:

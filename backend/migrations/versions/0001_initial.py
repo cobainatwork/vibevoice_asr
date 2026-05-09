@@ -55,7 +55,7 @@ def upgrade() -> None:
         sa.Column("hotwords", sa.JSON, nullable=False),
         sa.Column("active_model_id", sa.Integer),  # FK added below to break cycle
         sa.Column("webhook_url", sa.String(500)),
-        sa.Column("webhook_secret", sa.String(64)),
+        sa.Column("webhook_secret", sa.String(128)),
         sa.Column("created_at", sa.DateTime, nullable=False),
         sa.Column("updated_at", sa.DateTime, nullable=False),
     )

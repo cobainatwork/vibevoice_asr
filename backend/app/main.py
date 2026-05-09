@@ -31,13 +31,38 @@ async def lifespan(app: FastAPI):
     """Run startup/shutdown hooks."""
     settings = get_settings()
     ensure_data_dirs(settings)
-    logger.info("Backend starting in profile=%s", settings.deployment_profile)
+    logger.info(
+        "Backend starting profile=%s mock_vllm=%s",
+        settings.deployment_profile, settings.mock_vllm,
+    )
 
-    # TODO: validate Redis / DB / vLLM connectivity (warn but don't block startup)
+    # Best-effort connectivity checks（warn but don't block startup）
+    try:
+        from sqlalchemy import text as _sql_text
+
+        from app.db import engine
+        async with engine.begin() as conn:
+            await conn.execute(_sql_text("SELECT 1"))
+        logger.info("DB connectivity OK")
+    except Exception as e:
+        logger.warning("DB connectivity check failed: %s", e)
+
+    try:
+        from app.services.queue import get_pool
+        pool = await get_pool()
+        await pool.ping()
+        logger.info("Redis connectivity OK")
+    except Exception as e:
+        logger.warning("Redis connectivity check failed: %s", e)
 
     yield
 
-    # TODO: close DB engine, redis pool
+    # Shutdown
+    try:
+        from app.db import engine
+        await engine.dispose()
+    except Exception as e:
+        logger.warning("DB engine dispose failed: %s", e)
 
 
 def create_app() -> FastAPI:

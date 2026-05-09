@@ -80,6 +80,11 @@ class Settings(BaseSettings):
     # === Observability ===
     metrics_enabled: bool = True
 
+    # === Dev / Mock ===
+    # 啟用後 vllm_client.transcribe 不打 vLLM，回固定假 segments，
+    # 給 Windows dev 機（無 GPU）走完整 pipeline 用。詳見 SPEC.md §5.6。
+    mock_vllm: bool = False
+
     # === Computed ===
     @property
     def upload_dir(self) -> Path:
