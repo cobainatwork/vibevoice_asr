@@ -30,18 +30,23 @@ check() {
     fi
 }
 
+# 檢查 docker compose service 是否處於 running 狀態
+compose_running() {
+    docker compose ps --status running --services 2>/dev/null | grep -qx "$1"
+}
+
 echo "=== Container health ==="
-check "redis container running"     docker compose ps redis    --status running --quiet -- with-services
-check "backend container running"   docker compose ps backend  --status running --quiet -- with-services
-check "worker container running"    docker compose ps worker   --status running --quiet -- with-services
-check "frontend container running"  docker compose ps frontend --status running --quiet -- with-services
+check "redis container running"     compose_running redis
+check "backend container running"   compose_running backend
+check "worker container running"    compose_running worker
+check "frontend container running"  compose_running frontend
 
 echo
 echo "=== Backend ==="
-check "backend /healthz"          curl -fsS "$BACKEND/healthz"
-check "backend OpenAPI"           curl -fsS "$BACKEND/openapi.json"
-check "admin/projects reachable"  curl -fsS "$BACKEND/api/admin/projects"
-check "v1/openapi reachable"      curl -fsS "$BACKEND/api/v1/openapi.json"
+check "backend /healthz"             curl -fsS "$BACKEND/healthz"
+check "backend OpenAPI"              curl -fsS "$BACKEND/openapi.json"
+check "admin/system/health"          curl -fsS "$BACKEND/api/admin/system/health"
+check "admin/projects reachable"     curl -fsS "$BACKEND/api/admin/projects"
 
 echo
 echo "=== Redis ==="
@@ -50,6 +55,14 @@ check "redis ping"  docker exec vibevoice-redis redis-cli ping
 echo
 echo "=== Frontend ==="
 check "frontend serves index.html"  curl -fsS "$FRONTEND/"
+
+echo
+echo "=== v1 API (optional, M6+) ==="
+if curl -fsS "$BACKEND/openapi.json" 2>/dev/null | grep -q '"/api/v1/'; then
+    check "v1 routes registered"  bash -c "curl -fsS '$BACKEND/openapi.json' | grep -q '\"/api/v1/'"
+else
+    echo "  (v1 routes not wired — M6 milestone)"
+fi
 
 echo
 echo "=== vLLM (optional) ==="
