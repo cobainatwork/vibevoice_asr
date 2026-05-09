@@ -2,8 +2,7 @@
 Dataset service — CRUD + from_job + audio 複製。
 
 See SPEC.md §7.3.6 / §9.
-M3.5 milestone。本檔含 list / get / update / delete / create_from_import；
-create_from_job 留 Task 9。
+M3.5 milestone。本檔含 list / get / update / delete / create_from_import / create_from_job。
 """
 from __future__ import annotations
 
@@ -19,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError, ErrorCode
-from app.models import DatasetItem, DatasetSource, Project
+from app.models import DatasetItem, DatasetSource, Job, JobStatus, Project
 from app.schemas import DatasetItemPatch
 from app.services import dataset_importer
 from app.services.file_store import get_store
@@ -219,3 +218,82 @@ def _probe_audio_duration(path: Path) -> float:
             ErrorCode.AUDIO_DURATION_FAILED,
             f"Cannot extract duration from {path.name}: {e}",
         ) from None
+
+
+# ============================================================
+# create_from_job — Task 9
+# ============================================================
+
+
+async def create_from_job(
+    db: AsyncSession, *, job_id: str, notes: str | None,
+) -> DatasetItem:
+    """從已完成的 Job 建立 DatasetItem（複製 audio + segments → 0-indexed speaker）。
+
+    流程：
+      1. 找 job；不存在 → JOB_NOT_FOUND
+      2. status 必須為 DONE；否則 INVALID_JOB_STATE
+      3. 讀 job.segments JSON 欄位（內部 1-indexed），轉 0-indexed training JSON
+      4. INSERT row 取 auto-increment id
+      5. file_store.copy(job.audio_path → datasets/{id}/audio.{ext})
+      6. copy 失敗 → rollback row + 清 store
+    """
+    job = await db.get(Job, job_id)
+    if job is None:
+        raise AppError(ErrorCode.JOB_NOT_FOUND, f"Job {job_id} not found")
+    if job.status != JobStatus.DONE:
+        raise AppError(
+            ErrorCode.INVALID_JOB_STATE,
+            f"Job {job_id} is in {job.status.value}, expected done",
+        )
+
+    project = await db.get(Project, job.project_id)
+    project_hotwords = list(project.hotwords or []) if project else []
+
+    # job.segments 為內部 1-indexed dict list（admin TranscriptEditor 格式）
+    raw_segments = list(job.segments or [])
+    ext = _ext(job.audio_path)
+    label = {
+        "audio_duration": job.duration_sec,
+        "audio_path": f"audio.{ext}",
+        "segments": [
+            {
+                "speaker": max(0, int(s["speaker_id"]) - 1),  # 1-indexed → 0-indexed
+                "text": s["text"],
+                "start": s["start_time"],
+                "end": s["end_time"],
+            }
+            for s in raw_segments
+        ],
+        "customized_context": project_hotwords,
+    }
+
+    item = DatasetItem(
+        project_id=job.project_id,
+        audio_path="",
+        label=label,
+        duration_sec=job.duration_sec or 0.0,
+        source=DatasetSource.FROM_TRANSCRIPTION,
+        source_job_id=job.id,
+        notes=notes,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+
+    audio_key = f"datasets/{item.id}/audio.{ext}"
+    store = get_store()
+    try:
+        await store.copy(job.audio_path, audio_key)
+        item.audio_path = audio_key
+        await db.commit()
+        await db.refresh(item)
+    except Exception:
+        await db.delete(item)
+        await db.commit()
+        try:
+            await store.delete(f"datasets/{item.id}")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("create_from_job: cleanup store failed: %s", e)
+        raise
+    return item

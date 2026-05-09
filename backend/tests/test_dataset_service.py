@@ -14,7 +14,7 @@ from openpyxl import Workbook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError, ErrorCode
-from app.models import DatasetItem, DatasetSource, Project
+from app.models import DatasetItem, DatasetSource, Job, JobSource, JobStatus, Project
 from app.schemas import DatasetItemPatch
 from app.services import dataset_service
 
@@ -207,3 +207,78 @@ async def test_create_from_import_rollback_on_parse_fail(db_session, project, tm
     # disk 不應留下任何 datasets/*/
     assert not (tmp_path / "datasets").exists() or not any((tmp_path / "datasets").iterdir())
     fs._store = None
+
+
+# ============================================================
+# create_from_job — Task 9
+# ============================================================
+
+
+@pytest_asyncio.fixture
+async def succeeded_job(db_session, project, tmp_path):
+    """已完成的 Job + audio key + 兩段 segments（1-indexed speaker）。"""
+    from app.services import file_store as fs
+    fs._store = fs.LocalFileStore(root=tmp_path)
+    src_key = "uploads/job-abc/source.wav"
+    await fs._store.save_bytes(src_key, _make_wav_bytes(2.0))
+
+    job = Job(
+        id="job-abc",
+        project_id=project.id,
+        status=JobStatus.DONE,
+        source=JobSource.ADMIN_UPLOAD,
+        filename="source.wav",
+        audio_path=src_key,
+        duration_sec=2.0,
+        segments=[
+            {"start_time": 0.0, "end_time": 1.0, "speaker_id": 1, "text": "早安"},
+            {"start_time": 1.0, "end_time": 2.0, "speaker_id": 2, "text": "你好"},
+        ],
+    )
+    db_session.add(job)
+    await db_session.commit()
+    yield job
+    fs._store = None
+
+
+@pytest.mark.asyncio
+async def test_create_from_job_speaker_one_to_zero_indexed(db_session, succeeded_job):
+    item = await dataset_service.create_from_job(
+        db_session, job_id=succeeded_job.id, notes="from-test",
+    )
+    # speaker_id 1 → 0, 2 → 1
+    assert item.label["segments"][0]["speaker"] == 0
+    assert item.label["segments"][1]["speaker"] == 1
+    assert item.source.value == "from_transcription"
+    assert item.source_job_id == succeeded_job.id
+    assert item.notes == "from-test"
+
+
+@pytest.mark.asyncio
+async def test_create_from_job_audio_copied(db_session, succeeded_job, tmp_path):
+    item = await dataset_service.create_from_job(
+        db_session, job_id=succeeded_job.id, notes=None,
+    )
+    assert item.audio_path == f"datasets/{item.id}/audio.wav"
+    src = tmp_path / "uploads" / "job-abc" / "source.wav"
+    dst = tmp_path / item.audio_path
+    assert src.exists() and dst.exists()
+    assert src.read_bytes() == dst.read_bytes()
+
+
+@pytest.mark.asyncio
+async def test_create_from_job_non_succeeded_raises(db_session, project):
+    job = Job(
+        id="job-failed",
+        project_id=project.id,
+        status=JobStatus.FAILED,
+        source=JobSource.ADMIN_UPLOAD,
+        filename="source.wav",
+        audio_path="uploads/job-failed/source.wav",
+        duration_sec=1.0,
+    )
+    db_session.add(job)
+    await db_session.commit()
+    with pytest.raises(AppError) as ei:
+        await dataset_service.create_from_job(db_session, job_id=job.id, notes=None)
+    assert ei.value.code == ErrorCode.INVALID_JOB_STATE
