@@ -1,33 +1,28 @@
 import { create } from "zustand";
-import type { Project } from "../api/types";
 import { projectsApi } from "../api/projects";
+import type { ProjectOut } from "../api/types";
 
-interface ProjectStore {
-  projects: Project[];
-  current: Project | null;
+interface ProjectState {
+  projects: ProjectOut[];
   loading: boolean;
-  load: () => Promise<void>;
-  setCurrent: (id: number) => Promise<void>;
+  loaded: boolean;
+  refetch: () => Promise<void>;
+  getById: (id: number) => ProjectOut | undefined;
 }
 
-export const useProjectStore = create<ProjectStore>((set) => ({
+export const useProjectStore = create<ProjectState>((set, get) => ({
   projects: [],
-  current: null,
   loading: false,
-
-  load: async () => {
+  loaded: false,
+  refetch: async () => {
+    if (get().loading) return;
     set({ loading: true });
     try {
       const projects = await projectsApi.list();
-      set({ projects, loading: false });
-    } catch (e) {
+      set({ projects, loaded: true });
+    } finally {
       set({ loading: false });
-      throw e;
     }
   },
-
-  setCurrent: async (id: number) => {
-    const p = await projectsApi.get(id);
-    set({ current: p });
-  },
+  getById: (id) => get().projects.find((p) => p.id === id),
 }));

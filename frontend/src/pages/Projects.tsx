@@ -9,11 +9,11 @@ import { Link } from "react-router-dom";
 import { useProjectStore } from "../stores/projectStore";
 
 export default function Projects() {
-  const { projects, loading, load } = useProjectStore();
+  const { projects, loading, refetch } = useProjectStore();
 
   useEffect(() => {
-    load().catch(console.error);
-  }, [load]);
+    refetch().catch(console.error);
+  }, [refetch]);
 
   return (
     <div className="space-y-4 max-w-3xl">
