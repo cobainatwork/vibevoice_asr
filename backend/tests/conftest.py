@@ -23,22 +23,48 @@ def _isolate_env(tmp_path: Path, monkeypatch):
 
 @pytest_asyncio.fixture
 async def app_client() -> AsyncIterator:
-    """FastAPI app with isolated DB schema (tables created per test)."""
-    # 清掉 cached settings 確保讀到 monkeypatched env
+    """
+    FastAPI app with isolated DB schema (tables created per test).
+
+    重要：建立獨立 test engine + session 並 monkey-patch app.db 模組層
+    指向；test 結束 dispose 後還原。**不可**直接用 `from app.db import engine`
+    然後 drop_all：那個 engine 是 module 載入時用 prod BACKEND_DB_URL
+    建立的，drop_all 會抹掉 production /data/app.db 的業務 tables。
+    """
     from app.config import get_settings
     get_settings.cache_clear()
+    settings = get_settings()
 
-    # 重 import 以套用新 env
-    from app.db import Base, engine
-    from httpx import ASGITransport, AsyncClient
+    from app.db import Base, _make_async_url
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
 
-    async with engine.begin() as conn:
+    test_engine = create_async_engine(_make_async_url(settings.backend_db_url))
+    test_session_local = async_sessionmaker(
+        test_engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+    # 替換 app.db 的 module-level engine / SessionLocal，
+    # 讓 endpoint 中的 Depends(get_db) 拿到 test session
+    import app.db as db_module
+    original_engine = db_module.engine
+    original_sessionlocal = db_module.SessionLocal
+    db_module.engine = test_engine
+    db_module.SessionLocal = test_session_local
+
+    async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     from app.main import app
+    from httpx import ASGITransport, AsyncClient
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+    finally:
+        await test_engine.dispose()
+        db_module.engine = original_engine
+        db_module.SessionLocal = original_sessionlocal
