@@ -55,6 +55,9 @@ class ErrorCode(str, Enum):
     REPETITION_LOOP = "repetition_loop"  # auto-recovery exhausted
     PARSE_FAILED = "parse_failed"        # could not parse vLLM output
 
+    # === Job segments validation ===
+    INVALID_SEGMENTS = "invalid_segments"
+
     # === Training errors ===
     TRAINING_OOM = "training_oom"
     TRAINING_FAILED = "training_failed"
@@ -94,6 +97,7 @@ HTTP_STATUS_FOR_CODE: dict[ErrorCode, int] = {
     ErrorCode.JOB_FAILED: 500,
     ErrorCode.REPETITION_LOOP: 500,
     ErrorCode.PARSE_FAILED: 500,
+    ErrorCode.INVALID_SEGMENTS: 400,
     ErrorCode.TRAINING_OOM: 500,
     ErrorCode.TRAINING_FAILED: 500,
     ErrorCode.DATASET_EMPTY: 400,
