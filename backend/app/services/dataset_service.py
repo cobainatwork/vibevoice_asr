@@ -2,23 +2,39 @@
 Dataset service — CRUD + from_job + audio 複製。
 
 See SPEC.md §7.3.6 / §9.
-M3.5 milestone。本檔含 list / get / update / delete；
-create_from_import / create_from_job 留 Task 8 / 9。
+M3.5 milestone。本檔含 list / get / update / delete / create_from_import；
+create_from_job 留 Task 9。
 """
 from __future__ import annotations
 
 import logging
+import os
+import shutil
+import tempfile
+from pathlib import Path
 
+from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError, ErrorCode
-from app.models import DatasetItem
+from app.models import DatasetItem, DatasetSource, Project
 from app.schemas import DatasetItemPatch
 from app.services import dataset_importer
 from app.services.file_store import get_store
 
 logger = logging.getLogger(__name__)
+
+
+SUPPORTED_IMPORT_FORMATS = {"json", "xlsx", "srt", "txt"}
+
+# 對應到既有 models.DatasetSource enum（M2 已建 migration，不動 schema）
+_SOURCE_BY_FORMAT = {
+    "json": DatasetSource.IMPORTED_JSON,
+    "xlsx": DatasetSource.IMPORTED_XLSX,
+    "srt": DatasetSource.IMPORTED_SRT,
+    "txt": DatasetSource.IMPORTED_TXT,
+}
 
 
 async def list_items(db: AsyncSession, project_id: int) -> list[DatasetItem]:
@@ -74,3 +90,134 @@ async def delete_item(db: AsyncSession, item_id: int) -> None:
         logger.warning("delete_item: failed to remove %s: %s", target_dir, e)
     await db.delete(item)
     await db.commit()
+
+
+# ============================================================
+# create_from_import — Task 8
+# ============================================================
+
+
+async def create_from_import(
+    db: AsyncSession,
+    *,
+    project_id: int,
+    audio_upload: UploadFile,
+    label_upload: UploadFile,
+    format: str,
+) -> DatasetItem:
+    """從上傳的音檔 + label 檔建立 DatasetItem。
+
+    流程：
+      1. 驗 format / project 存在
+      2. 串流上傳檔到 tempfile（避免一次載入記憶體）
+      3. probe 音檔秒數
+      4. 解析 label → canonical training JSON
+      5. INSERT row 取 auto-increment id
+      6. shutil.move audio tempfile → datasets/{id}/audio.{ext}
+      7. 失敗點分兩種 rollback：
+         - duration / import_label fail（row 未建）→ 清 tempfile
+         - move audio fail（row 已建）→ db.delete + store.delete + commit
+    """
+    if format not in SUPPORTED_IMPORT_FORMATS:
+        raise AppError(
+            ErrorCode.UNSUPPORTED_FORMAT,
+            f"Format must be one of {sorted(SUPPORTED_IMPORT_FORMATS)}",
+        )
+    project = await db.get(Project, project_id)
+    if project is None:
+        raise AppError(ErrorCode.PROJECT_NOT_FOUND, f"Project {project_id} not found")
+
+    audio_tmp_path = await _stream_to_tempfile(audio_upload)
+    label_tmp_path = await _stream_to_tempfile(label_upload)
+    try:
+        duration = _probe_audio_duration(audio_tmp_path)
+        label = dataset_importer.import_label(
+            label_path=label_tmp_path,
+            audio_filename="audio." + _ext(audio_upload.filename or ""),
+            audio_duration=duration,
+            format=format,
+            project_hotwords=list(project.hotwords or []),
+        )
+    except Exception:
+        _silent_unlink(audio_tmp_path)
+        _silent_unlink(label_tmp_path)
+        raise
+    finally:
+        _silent_unlink(label_tmp_path)
+
+    # Insert row（取 auto-increment id 才知道 audio_path 該放哪）
+    item = DatasetItem(
+        project_id=project_id,
+        audio_path="",
+        label=label,
+        duration_sec=duration,
+        source=_SOURCE_BY_FORMAT[format],
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+
+    # Move audio tempfile → final location
+    ext = _ext(audio_upload.filename or "")
+    audio_key = f"datasets/{item.id}/audio.{ext}"
+    store = get_store()
+    try:
+        dst = store.local_path(audio_key)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(audio_tmp_path), str(dst))
+        item.audio_path = audio_key
+        await db.commit()
+        await db.refresh(item)
+    except Exception:
+        # rollback row + cleanup disk
+        await db.delete(item)
+        await db.commit()
+        try:
+            await store.delete(f"datasets/{item.id}")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("create_from_import: cleanup store failed: %s", e)
+        _silent_unlink(audio_tmp_path)
+        raise
+    return item
+
+
+async def _stream_to_tempfile(upload: UploadFile) -> Path:
+    """Stream UploadFile 到臨時檔，回傳 path。caller 負責 unlink。"""
+    fd, name = tempfile.mkstemp(suffix=Path(upload.filename or "").suffix)
+    os.close(fd)
+    p = Path(name)
+    p.write_bytes(b"")  # 確保檔案存在且為空
+    while True:
+        chunk = await upload.read(65536)
+        if not chunk:
+            break
+        with open(p, "ab") as f:  # noqa: ASYNC101
+            f.write(chunk)
+    return p
+
+
+def _ext(filename: str) -> str:
+    return Path(filename).suffix.lstrip(".").lower() or "bin"
+
+
+def _silent_unlink(p: Path) -> None:
+    try:
+        p.unlink()
+    except (FileNotFoundError, OSError):
+        pass
+
+
+def _probe_audio_duration(path: Path) -> float:
+    """用 mutagen 取秒數。失敗 → AUDIO_DURATION_FAILED。"""
+    try:
+        from mutagen import File as MutagenFile
+
+        f = MutagenFile(str(path))
+        if f is None or not getattr(f, "info", None) or not getattr(f.info, "length", None):
+            raise ValueError("no info")
+        return float(f.info.length)
+    except Exception as e:
+        raise AppError(
+            ErrorCode.AUDIO_DURATION_FAILED,
+            f"Cannot extract duration from {path.name}: {e}",
+        ) from None
