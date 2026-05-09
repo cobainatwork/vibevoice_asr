@@ -1,55 +1,66 @@
 import { create } from "zustand";
 import type { Segment } from "../api/types";
+import type { EditorSource } from "../lib/editorSource";
 
 const SNAP_GRID_SEC = 0.05;
 const MIN_SEGMENT_LEN_SEC = 0.1;
 const NOOP_EPSILON = 1e-6;
 
 interface EditorState {
-  jobId: string | null;
+  source: EditorSource | null;
   segments: Segment[];
   originalSnapshot: string; // JSON.stringify(segments) 用於 dirty 判定
   activeIdx: number;
   saving: boolean;
   lastSavedAt: Date | null;
 
-  init: (jobId: string, segments: Segment[]) => void;
+  // 由 source.load() 帶回的 metadata
+  audioUrl: string;
+  durationSec: number;
+  title: string;
+
+  init: (source: EditorSource) => Promise<void>;
   reset: () => void;
   setActive: (idx: number) => void;
   patchSegment: (idx: number, partial: Partial<Segment>) => void;
   resizeSegment: (idx: number, start: number, end: number) => void;
 
   isDirty: () => boolean;
+  save: () => Promise<void>;
   markSaved: (segments: Segment[]) => void;
   setSaving: (b: boolean) => void;
 }
 
-export const useEditorStore = create<EditorState>((set, get) => ({
-  jobId: null,
-  segments: [],
+const INITIAL_STATE = {
+  source: null as EditorSource | null,
+  segments: [] as Segment[],
   originalSnapshot: "[]",
   activeIdx: 0,
   saving: false,
-  lastSavedAt: null,
+  lastSavedAt: null as Date | null,
+  audioUrl: "",
+  durationSec: 0,
+  title: "",
+};
 
-  init: (jobId, segments) =>
+export const useEditorStore = create<EditorState>((set, get) => ({
+  ...INITIAL_STATE,
+
+  init: async (source) => {
+    const loaded = await source.load();
     set({
-      jobId,
-      segments,
-      originalSnapshot: JSON.stringify(segments),
+      source,
+      segments: loaded.segments,
+      originalSnapshot: JSON.stringify(loaded.segments),
       activeIdx: 0,
       saving: false,
       lastSavedAt: null,
-    }),
-  reset: () =>
-    set({
-      jobId: null,
-      segments: [],
-      originalSnapshot: "[]",
-      activeIdx: 0,
-      saving: false,
-      lastSavedAt: null,
-    }),
+      audioUrl: loaded.audioUrl,
+      durationSec: loaded.durationSec,
+      title: loaded.title,
+    });
+  },
+  reset: () => set({ ...INITIAL_STATE }),
   setActive: (idx) => set({ activeIdx: idx }),
   patchSegment: (idx, partial) =>
     set({ segments: replaceAt(get().segments, idx, partial) }),
@@ -70,6 +81,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
   isDirty: () => JSON.stringify(get().segments) !== get().originalSnapshot,
+
+  // 守 CLAUDE.md §4.12 兩條 invariant：
+  //   1. 取最新 segments 用 get()，不靠 closure
+  //   2. markSaved 用送出當下的 frontend snapshot，不信任 backend round-trip
+  save: async () => {
+    const state = get();
+    if (state.saving || !state.isDirty()) return;
+    if (!state.source) return;
+    const snapshot = state.segments;
+    set({ saving: true });
+    try {
+      await state.source.save(snapshot);
+      get().markSaved(snapshot);
+    } catch {
+      set({ saving: false }); // client.ts 已 toast
+    }
+  },
   markSaved: (segments) =>
     set({
       originalSnapshot: JSON.stringify(segments),

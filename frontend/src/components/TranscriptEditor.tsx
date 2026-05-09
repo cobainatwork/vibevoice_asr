@@ -8,21 +8,23 @@ import { useEditorStore } from "../stores/editorStore";
 import { useAutoSave } from "../hooks/useAutoSave";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useToast } from "../hooks/useToast";
-import { jobsApi } from "../api/jobs";
-import type { JobOut, Segment } from "../api/types";
+import type { EditorSource } from "../lib/editorSource";
+import type { ProjectOut, Segment } from "../api/types";
 
 const AUTOSAVE_DELAY_MS = 3000;
 const SEEK_STEP_SEC = 5;
 
 interface Props {
-  job: JobOut;
-  audioUrl: string;
-  projectId: number;
+  source: EditorSource;
+  project: ProjectOut;
+  /** 可選：標頭右上「檢視模式」按鈕的目標路徑。dataset editor 無此概念可省略。 */
+  viewLink?: string;
 }
 
-export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
-  const { segments, activeIdx, saving, lastSavedAt, dirty } = useEditorSelectors();
-  const { init, reset, setActive, patchSegment, resizeSegment, setSaving, markSaved } =
+export function TranscriptEditor({ source, project: _project, viewLink }: Props) {
+  const { segments, activeIdx, saving, lastSavedAt, dirty, audioUrl, title } =
+    useEditorSelectors();
+  const { init, reset, setActive, patchSegment, resizeSegment } =
     useEditorStore.getState();
 
   const waveRef = useRef<WaveformHandle>(null);
@@ -30,22 +32,13 @@ export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
   const speakerOptions = useSpeakerOptions(segments);
 
   useEffect(() => {
-    init(job.id, job.segments ?? []);
+    init(source);
     return () => reset();
-  }, [job.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source]);
 
-  const save = async () => {
-    const state = useEditorStore.getState();
-    if (state.saving || !state.isDirty()) return;
-    const snapshot = state.segments;
-    setSaving(true);
-    try {
-      await jobsApi.patchSegments(job.id, snapshot);
-      markSaved(snapshot);
-    } catch {
-      setSaving(false); // client.ts 已 toast
-    }
-  };
+  // 直接委派給 store.save —— store 內守 §4.12 兩條 invariant。
+  const save = () => useEditorStore.getState().save();
 
   useAutoSave(dirty, save, { delayMs: AUTOSAVE_DELAY_MS });
 
@@ -80,21 +73,25 @@ export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
     onManualSave: () => { save(); toast.info("手動儲存"); },
   });
 
+  const originalSegments = useOriginalSegments();
+
   return (
     <div className="max-w-7xl mx-auto px-6 py-6">
       <header className="flex items-center justify-between mb-4 gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900 truncate max-w-md">
-            {job.filename}
+            {title}
           </h1>
           <SaveStatusBadge saving={saving} dirty={dirty} lastSavedAt={lastSavedAt} />
         </div>
-        <Link
-          to={`/projects/${projectId}/edit/${job.id}?mode=view`}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 border border-slate-300 rounded cursor-pointer hover:bg-slate-50 transition-colors duration-200"
-        >
-          <Eye className="w-4 h-4" /> 檢視模式
-        </Link>
+        {viewLink && (
+          <Link
+            to={viewLink}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 border border-slate-300 rounded cursor-pointer hover:bg-slate-50 transition-colors duration-200"
+          >
+            <Eye className="w-4 h-4" /> 檢視模式
+          </Link>
+        )}
       </header>
 
       <WaveformPlayer
@@ -114,7 +111,7 @@ export function TranscriptEditor({ job, audioUrl, projectId }: Props) {
               key={i}
               segment={seg}
               active={i === activeIdx}
-              dirty={isSegmentDirty(seg, (job.segments ?? [])[i])}
+              dirty={isSegmentDirty(seg, originalSegments[i])}
               onClick={() => focusSegment(i)}
             />
           ))}
@@ -204,7 +201,28 @@ function useEditorSelectors() {
   const saving = useEditorStore((s) => s.saving);
   const lastSavedAt = useEditorStore((s) => s.lastSavedAt);
   const isDirty = useEditorStore((s) => s.isDirty);
-  return { segments, activeIdx, saving, lastSavedAt, dirty: isDirty() };
+  const audioUrl = useEditorStore((s) => s.audioUrl);
+  const title = useEditorStore((s) => s.title);
+  return {
+    segments, activeIdx, saving, lastSavedAt, audioUrl, title,
+    dirty: isDirty(),
+  };
+}
+
+
+/**
+ * 從 originalSnapshot 還原成 Segment[]，給 SegmentListItem 的 dirty dot 用
+ * （比對「目前段」與「最近一次儲存的對應段」是否相同）。
+ */
+function useOriginalSegments(): Segment[] {
+  const snapshot = useEditorStore((s) => s.originalSnapshot);
+  return useMemo(() => {
+    try {
+      return JSON.parse(snapshot) as Segment[];
+    } catch {
+      return [];
+    }
+  }, [snapshot]);
 }
 
 
