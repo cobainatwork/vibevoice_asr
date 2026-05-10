@@ -48,8 +48,11 @@ class Settings(BaseSettings):
 
     # === Audio ===
     max_audio_duration_sec: int = 14400
-    auto_split_threshold_sec: int = 3300
-    split_chunk_duration_sec: int = 3000
+    # 實測 vLLM 對 >60s 音檔容易陷入 repetition loop（理論上下文 65k 能吃到 55min
+    # 但生成穩定性實際只到 30-60s）。預設 60s threshold + 55s chunk + 5s overlap，
+    # 50s 步進。長音檔被切成 N 段獨立推論再 merge。
+    auto_split_threshold_sec: int = 60
+    split_chunk_duration_sec: int = 55
     split_overlap_sec: int = 5
     sync_audio_max_duration_sec: int = 120
 
