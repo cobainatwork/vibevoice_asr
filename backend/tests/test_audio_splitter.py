@@ -149,3 +149,50 @@ def test_is_overlap_duplicate_close_but_different_text():
     prev = _seg(0.0, 5.0, 1, "你好世界")
     cur = _seg(3.0, 8.0, 1, "完全不同的話")
     assert _is_overlap_duplicate(prev, cur, overlap_sec=5.0) is False
+
+
+# ============================================================
+# split_chunk_in_half_metadata
+# ============================================================
+
+
+def test_split_chunk_in_half_offsets_correct():
+    """parent 55s chunk 切半 → 兩個 sub-chunks，offset 在 parent 全域時間軸內。"""
+    from app.services.audio_splitter import Chunk, split_chunk_in_half_metadata
+
+    parent = Chunk(
+        path=Path("/tmp/parent.mp3"),
+        start_offset_sec=100.0,
+        end_offset_sec=155.0,
+        is_split=True,
+    )
+    subs = split_chunk_in_half_metadata(parent, overlap_sec=5.0)
+    assert len(subs) == 2
+
+    # 第一個 sub: 100 → 130（30s 含 5s overlap 進入第二段）
+    assert subs[0].start_offset_sec == 100.0
+    assert subs[0].end_offset_sec == 130.0
+    # 第二個 sub: 125 → 155（5s overlap）
+    assert subs[1].start_offset_sec == 125.0
+    assert subs[1].end_offset_sec == 155.0
+    # 兩段覆蓋整個 parent 範圍
+    assert subs[0].end_offset_sec >= subs[1].start_offset_sec  # 有 overlap
+    assert subs[1].end_offset_sec == parent.end_offset_sec
+
+
+def test_split_chunk_in_half_min_duration_clamps_overlap():
+    """parent 太短（譬如 8s）時 overlap 不能超過 chunk_dur，否則 sub 無意義。"""
+    from app.services.audio_splitter import Chunk, split_chunk_in_half_metadata
+
+    parent = Chunk(
+        path=Path("/tmp/short.mp3"),
+        start_offset_sec=0.0,
+        end_offset_sec=8.0,
+        is_split=True,
+    )
+    subs = split_chunk_in_half_metadata(parent, overlap_sec=5.0)
+    # 8s parent、5s overlap 不合理 → 自動降 overlap 到 chunk_dur 的 1/3 以下
+    # sub 1: 0-5、sub 2: 3-8（overlap 2s）
+    assert len(subs) == 2
+    assert subs[0].end_offset_sec - subs[1].start_offset_sec >= 1.0  # overlap >= 1s
+    assert subs[0].end_offset_sec - subs[0].start_offset_sec >= 4.0  # sub 不會太短

@@ -240,3 +240,76 @@ def _text_similarity(a: str, b: str) -> float:
     if not a or not b:
         return 0.0
     return SequenceMatcher(None, a, b).ratio()
+
+
+def split_chunk_in_half_metadata(
+    parent: Chunk,
+    overlap_sec: float = 5.0,
+) -> list[Chunk]:
+    """把 parent chunk metadata 切半（不真的執行 ffmpeg）— 回兩個 sub-chunk Chunk
+    instances 帶正確 start/end offset。
+
+    為何單獨抽 metadata helper：caller（transcribe_with_retry）需要先拿 sub
+    metadata 才能跑 ffmpeg 切實體 sub file。先決定切點再做 IO 比較好測。
+
+    Sub 路徑暫設 parent.path（caller 後續會 ffmpeg 寫到實際 sub_dir）。
+    """
+    parent_dur = parent.end_offset_sec - parent.start_offset_sec
+    if parent_dur <= 0:
+        raise ValueError(f"parent chunk has non-positive duration: {parent_dur}")
+
+    # overlap 不可超過 chunk_dur 的 1/3（避免 sub 太短）
+    safe_overlap = min(overlap_sec, parent_dur / 3)
+
+    mid = parent.start_offset_sec + parent_dur / 2
+    sub_a_start = parent.start_offset_sec
+    sub_a_end = mid + safe_overlap / 2
+    sub_b_start = mid - safe_overlap / 2
+    sub_b_end = parent.end_offset_sec
+
+    return [
+        Chunk(
+            path=parent.path,
+            start_offset_sec=sub_a_start,
+            end_offset_sec=sub_a_end,
+            is_split=True,
+        ),
+        Chunk(
+            path=parent.path,
+            start_offset_sec=sub_b_start,
+            end_offset_sec=sub_b_end,
+            is_split=True,
+        ),
+    ]
+
+
+def split_chunk_in_half(
+    parent: Chunk,
+    sub_dir: Path,
+    depth: int,
+    overlap_sec: float = 5.0,
+) -> list[Chunk]:
+    """把 parent chunk 切半成兩個實體 sub MP3 file，回 Chunk list 含寫好的 path。
+
+    sub_dir 是 caller 指定的子目錄（譬如 chunks_dir / f"depth_{depth}"），
+    file 命名 `chunk_{parent.start_offset_sec:.0f}_sub_{i}.mp3`。
+    """
+    sub_metas = split_chunk_in_half_metadata(parent, overlap_sec=overlap_sec)
+    sub_dir.mkdir(parents=True, exist_ok=True)
+    out: list[Chunk] = []
+    for i, meta in enumerate(sub_metas):
+        sub_path = sub_dir / f"chunk_{int(parent.start_offset_sec)}_sub_{i}.mp3"
+        # 從 parent file 切（parent.path 是已存在的 mp3）
+        relative_start = meta.start_offset_sec - parent.start_offset_sec
+        relative_dur = meta.end_offset_sec - meta.start_offset_sec
+        _ffmpeg_extract_chunk(
+            parent.path, sub_path, relative_start, relative_dur,
+            chunk_index=i, cleanup_dir=sub_dir,
+        )
+        out.append(Chunk(
+            path=sub_path,
+            start_offset_sec=meta.start_offset_sec,
+            end_offset_sec=meta.end_offset_sec,
+            is_split=True,
+        ))
+    return out
