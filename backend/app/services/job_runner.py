@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import shutil
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,25 @@ from app.utils.audio import extract_audio_to_mp3, get_duration_sec, is_video_fil
 from app.utils.parser import parse_transcription
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ChunkOutcome:
+    """單一 chunk（含 retry 後）的轉錄結果。
+
+    fields:
+      segments: 該 chunk（已加 offset）的 segment list
+      raw_text: vLLM 原始輸出（多次 retry 時用 separator 串接）
+      partial: 達 retry 上限仍 partial 為 True
+      depth_reached: 實際遞迴到的最深深度（0 = 不 retry、N = retry N 次）
+      attempts: 該 chunk 累計 vLLM 呼叫次數（含所有 retry sub-chunks）
+    """
+
+    segments: list[dict] = field(default_factory=list)
+    raw_text: str = ""
+    partial: bool = False
+    depth_reached: int = 0
+    attempts: int = 0
 
 
 async def run_transcribe(job_id: str) -> None:
