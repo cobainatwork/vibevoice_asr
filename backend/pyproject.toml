@@ -63,6 +63,7 @@ pytest-cov = "^4.1.0"
 httpx = "^0.26.0"
 ruff = "^0.3.0"
 mypy = "^1.8.0"
+bandit = "^1.7.7"
 
 [tool.poetry.extras]
 postgres = ["asyncpg"]

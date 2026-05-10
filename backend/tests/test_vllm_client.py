@@ -65,9 +65,14 @@ def test_detect_repetition_normal_text_false():
 
 def test_detect_repetition_obvious_loop_true():
     """末段大量重複同 substring → True。"""
+    # 用 constant 動態算，避免 detection 設定調整時 test 寫死值跟不上
+    sub = "X" * REPETITION_MIN_SUBSTRING_LEN
+    n_repeat = max(
+        REPETITION_MIN_OCCURRENCES,
+        REPETITION_WINDOW_CHARS // len(sub) + 1,
+    )
     pad = "x" * 50
-    loop = "ABCDEFGHIJ" * 20  # 10 字 × 20 次 = 200 字
-    buffer = pad + loop
+    buffer = pad + sub * n_repeat
     assert VllmClient._detect_repetition(buffer) is True
 
 
