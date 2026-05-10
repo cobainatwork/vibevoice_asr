@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { Eye, CheckCircle2, Loader2 } from "lucide-react";
 import { WaveformPlayer, type WaveformHandle } from "./WaveformPlayer";
@@ -7,9 +7,9 @@ import { SegmentFocusEditor } from "./SegmentFocusEditor";
 import { useEditorStore } from "../stores/editorStore";
 import { useAutoSave } from "../hooks/useAutoSave";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
+import { useTimeUpdateActiveSync } from "../hooks/useTimeUpdateActiveSync";
 import { useToast } from "../hooks/useToast";
 import type { EditorSource } from "../lib/editorSource";
-import { findActiveSegmentIdx } from "../lib/segmentLookup";
 import type { ProjectOut, Segment } from "../api/types";
 
 const AUTOSAVE_DELAY_MS = 3000;
@@ -66,15 +66,7 @@ export function TranscriptEditor({ source, project: _project, viewLink }: Props)
     }
   };
 
-  // 播放時跟隨同步 active segment（wavesurfer ~30Hz）。
-  // dedup（idx === activeIdx 跳過）避免 region useEffect 高頻重建。
-  const handleTimeUpdate = useCallback(
-    (t: number) => {
-      const idx = findActiveSegmentIdx(segments, t);
-      if (idx !== -1 && idx !== activeIdx) setActive(idx);
-    },
-    [segments, activeIdx, setActive],
-  );
+  const handleTimeUpdate = useTimeUpdateActiveSync(segments, activeIdx, setActive);
 
   useEditorShortcuts({
     waveRef,

@@ -11,13 +11,15 @@ import os
 import subprocess
 from pathlib import Path
 
-from app.constants import VIDEO_EXTENSIONS, guess_mime
+from app.constants import (
+    ASR_AUDIO_CHANNELS,
+    ASR_AUDIO_MP3_QUALITY,
+    ASR_AUDIO_SAMPLE_RATE_HZ,
+    VIDEO_EXTENSIONS,
+    guess_mime,
+)
 from app.errors import AppError, ErrorCode
 
-# 預設抽音規格：16kHz mono MP3（ASR 標準輸入；MP3 已實證 vLLM 端讀得下）
-EXTRACT_SAMPLE_RATE = 16000
-EXTRACT_CHANNELS = 1
-EXTRACT_QUALITY = 4  # libmp3lame -q:a 4 ≈ 128 kbps VBR
 EXTRACT_TIMEOUT_SEC = 300
 
 
@@ -64,11 +66,11 @@ def extract_audio_to_mp3(input_path: Path) -> bytes:
                 "-y",
                 "-i", str(input_path),
                 "-vn",                      # 丟視訊軌
-                "-ar", str(EXTRACT_SAMPLE_RATE),
-                "-ac", str(EXTRACT_CHANNELS),
+                "-ar", str(ASR_AUDIO_SAMPLE_RATE_HZ),
+                "-ac", str(ASR_AUDIO_CHANNELS),
                 "-f", "mp3",
                 "-c:a", "libmp3lame",
-                "-q:a", str(EXTRACT_QUALITY),
+                "-q:a", str(ASR_AUDIO_MP3_QUALITY),
                 "pipe:1",
             ],
             input=b"",

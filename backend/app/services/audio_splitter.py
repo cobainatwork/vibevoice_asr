@@ -24,6 +24,11 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 from app.config import get_settings
+from app.constants import (
+    ASR_AUDIO_CHANNELS,
+    ASR_AUDIO_MP3_QUALITY,
+    ASR_AUDIO_SAMPLE_RATE_HZ,
+)
 from app.errors import AppError, ErrorCode
 
 logger = logging.getLogger(__name__)
@@ -32,10 +37,7 @@ logger = logging.getLogger(__name__)
 # 跨 chunk overlap 去重門檻：兩 segment 文字相似度 >= 此值視為同一段
 OVERLAP_DUP_SIMILARITY = 0.7
 
-# 切段後音訊規格（ASR 標準輸入）
-SPLIT_SAMPLE_RATE = 16000
-SPLIT_CHANNELS = 1
-SPLIT_QUALITY = 4  # libmp3lame -q:a 4 ≈ 128 kbps VBR
+# splitter 內 ffmpeg subprocess 的超時（單 chunk 最多 600s 處理時間）
 SPLIT_TIMEOUT_SEC = 600
 
 
@@ -144,10 +146,10 @@ def _ffmpeg_extract_chunk(
                 "-t", str(duration_sec),
                 "-i", str(input_path),
                 "-vn",
-                "-ar", str(SPLIT_SAMPLE_RATE),
-                "-ac", str(SPLIT_CHANNELS),
+                "-ar", str(ASR_AUDIO_SAMPLE_RATE_HZ),
+                "-ac", str(ASR_AUDIO_CHANNELS),
                 "-c:a", "libmp3lame",
-                "-q:a", str(SPLIT_QUALITY),
+                "-q:a", str(ASR_AUDIO_MP3_QUALITY),
                 str(chunk_path),
             ],
             check=True,

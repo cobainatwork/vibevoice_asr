@@ -77,6 +77,17 @@ def guess_mime(filename: str) -> str:
 
 
 # ============================================================
+# ASR audio extraction format
+# vLLM 標準輸入：16kHz mono MP3。所有 ffmpeg 抽 audio / 切段共用同一規格、
+# 集中於此避免 audio.py 跟 audio_splitter.py 各維護一份漂移。
+# ============================================================
+
+ASR_AUDIO_SAMPLE_RATE_HZ = 16000
+ASR_AUDIO_CHANNELS = 1
+ASR_AUDIO_MP3_QUALITY = 4  # libmp3lame -q:a (4 ≈ 128 kbps VBR)
+
+
+# ============================================================
 # Repetition loop detection
 # Source: vendor/VibeVoice/vllm_plugin/tests/test_api_auto_recover.py
 # ============================================================

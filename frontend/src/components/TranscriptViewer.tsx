@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Edit3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { WaveformPlayer, type WaveformHandle } from "./WaveformPlayer";
 import { SegmentListItem } from "./SegmentListItem";
-import { findActiveSegmentIdx } from "../lib/segmentLookup";
+import { useTimeUpdateActiveSync } from "../hooks/useTimeUpdateActiveSync";
 import type { JobOut } from "../api/types";
 
 interface Props {
@@ -24,14 +24,7 @@ export function TranscriptViewer({ job, audioUrl, projectId }: Props) {
     waveRef.current?.play();
   };
 
-  // 播放時跟隨同步 active segment；dedup 避免 region useEffect 高頻重建。
-  const handleTimeUpdate = useCallback(
-    (t: number) => {
-      const idx = findActiveSegmentIdx(segments, t);
-      if (idx !== -1 && idx !== active) setActive(idx);
-    },
-    [segments, active],
-  );
+  const handleTimeUpdate = useTimeUpdateActiveSync(segments, active, setActive);
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-6">
