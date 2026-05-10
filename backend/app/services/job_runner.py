@@ -29,7 +29,12 @@ from app.constants import guess_mime
 from app.db import db_session
 from app.errors import AppError, ErrorCode
 from app.models import Job, JobStatus, Project
-from app.services.audio_splitter import Chunk, merge_chunk_results, split_long_audio
+from app.services.audio_splitter import (
+    Chunk,
+    merge_chunk_results,
+    split_chunk_in_half,
+    split_long_audio,
+)
 from app.services.vllm_client import VllmClient
 from app.utils.audio import extract_audio_to_mp3, get_duration_sec, is_video_file
 from app.utils.parser import parse_transcription
@@ -54,6 +59,70 @@ class ChunkOutcome:
     partial: bool = False
     depth_reached: int = 0
     attempts: int = 0
+
+
+async def transcribe_with_retry(
+    chunk: Chunk,
+    *,
+    depth: int,
+    max_depth: int,
+    sem: asyncio.Semaphore,
+    vllm_base_url: str | list[str],
+    hotwords: list[str],
+) -> ChunkOutcome:
+    """遞迴 chunk-level retry。
+
+    depth 0 = 原始 chunk；達 max_depth 仍 partial 視為達上限、接受結果。
+    sub-chunks 共用同一 semaphore 控全域併發。
+    """
+    audio_bytes, mime = await _load_chunk_audio(chunk)
+    chunk_dur = chunk.end_offset_sec - chunk.start_offset_sec
+
+    client = VllmClient(vllm_base_url)
+    async with sem:
+        result = await client.transcribe(audio_bytes, mime, chunk_dur, hotwords)
+
+    segs, _ = parse_transcription(result["raw_text"])
+    # offset 在這層加（segments 的 start_time 是 chunk 內部時間）
+    for s in segs:
+        s["start_time"] += chunk.start_offset_sec
+        s["end_time"] += chunk.start_offset_sec
+
+    if not result.get("partial") or depth >= max_depth:
+        return ChunkOutcome(
+            segments=segs,
+            raw_text=result["raw_text"],
+            partial=result.get("partial", False),
+            depth_reached=depth,
+            attempts=result["attempts"],
+        )
+
+    # Partial、未達上限 → 切半遞迴
+    sub_dir = chunk.path.parent / f"depth_{depth + 1}"
+    sub_chunks = split_chunk_in_half(chunk, sub_dir, depth + 1)
+    sub_outcomes = await asyncio.gather(*[
+        transcribe_with_retry(
+            sc, depth=depth + 1, max_depth=max_depth, sem=sem,
+            vllm_base_url=vllm_base_url, hotwords=hotwords,
+        )
+        for sc in sub_chunks
+    ])
+
+    # Merge sub outcomes（segments 已加完 offset、直接拼）
+    merged_segs: list[dict] = []
+    for o in sub_outcomes:
+        merged_segs.extend(o.segments)
+    merged_segs.sort(key=lambda s: s["start_time"])
+
+    return ChunkOutcome(
+        segments=merged_segs,
+        raw_text="\n--- depth {} sub ---\n".format(depth + 1).join(
+            o.raw_text for o in sub_outcomes
+        ),
+        partial=any(o.partial for o in sub_outcomes),
+        depth_reached=max(o.depth_reached for o in sub_outcomes),
+        attempts=result["attempts"] + sum(o.attempts for o in sub_outcomes),
+    )
 
 
 async def run_transcribe(job_id: str) -> None:
