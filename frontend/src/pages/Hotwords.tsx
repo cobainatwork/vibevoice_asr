@@ -21,13 +21,16 @@ export default function Hotwords() {
 
   useEffect(() => {
     if (!project) refetch();
-  }, [project]);
+  }, [project, refetch]);
 
   useEffect(() => {
     if (project) {
       setWords(project.hotwords ?? []);
       setOriginal(project.hotwords ?? []);
     }
+    // 故意只看 project.id / updated_at — 否則 store 內部更新時 project ref 變動
+    // 會覆蓋使用者編輯到的 words。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, project?.updated_at]);
 
   const dirty = JSON.stringify(words) !== JSON.stringify(original);

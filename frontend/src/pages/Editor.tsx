@@ -27,8 +27,10 @@ export default function Editor() {
   }, [itemId]);
 
   // editorSource 對 jobId 穩定，避免 TranscriptEditor 重複 init。
+  // 故意只看 .id — job / project ref 變不必重 init editor。
   const source = useMemo(
     () => (job && project ? jobEditorSource(job.id, project) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [job?.id, project?.id],
   );
 

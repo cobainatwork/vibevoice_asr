@@ -15,7 +15,7 @@ function NotImplemented({ pageName }: { pageName: string }) {
   const toast = useToast();
   useEffect(() => {
     toast.info(`「${pageName}」頁面尚未開放（M3.5+ 才實作）`);
-  }, [pageName]);
+  }, [pageName, toast]);
   return <Navigate to="/" replace />;
 }
 

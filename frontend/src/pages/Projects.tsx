@@ -15,7 +15,7 @@ export default function Projects() {
 
   useEffect(() => {
     if (!loaded) refetch();
-  }, [loaded]);
+  }, [loaded, refetch]);
 
   const onCreate = async (data: { name: string; description?: string; webhook_url?: string; hotwords: string[] }) => {
     await projectsApi.create(data);

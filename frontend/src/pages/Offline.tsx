@@ -21,7 +21,7 @@ export default function Offline() {
   const toast = useToast();
   const pollRef = useRef<number | null>(null);
 
-  useEffect(() => { if (!project) refetchProjects(); }, [project]);
+  useEffect(() => { if (!project) refetchProjects(); }, [project, refetchProjects]);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);

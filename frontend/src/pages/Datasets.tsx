@@ -4,7 +4,7 @@
  * See SPEC.md §8.3.5.
  * M3.5 milestone.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Download, Upload as UploadIcon, FileText, Trash2, Edit3, History } from "lucide-react";
 import { datasetsApi } from "../api/datasets";
@@ -28,22 +28,24 @@ export default function Datasets() {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     setLoading(true);
     try {
       setItems(await datasetsApi.list(projectId));
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
     if (!project) refetch();
-  }, [project]);
+  }, [project, refetch]);
 
   useEffect(() => {
     if (project) reload();
-  }, [project?.id]);
+    // 故意只看 project.id — store list 變化導致 project ref 變不必重 fetch dataset。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project?.id, reload]);
 
   const onDelete = async (item: DatasetItem) => {
     if (!window.confirm(`確定刪除 dataset #${item.id}?`)) return;

@@ -25,7 +25,7 @@ export function Sidebar() {
 
   useEffect(() => {
     if (!loaded) refetch();
-  }, [loaded]);
+  }, [loaded, refetch]);
 
   const projectIdRaw = params.id ?? location.pathname.match(/^\/projects\/(\d+)/)?.[1];
   const projectId = projectIdRaw ? Number(projectIdRaw) : null;

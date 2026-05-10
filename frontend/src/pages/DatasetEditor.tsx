@@ -16,8 +16,10 @@ export default function DatasetEditor() {
   }, [projectsLoaded, refetchProjects]);
 
   // editorSource 對 itemId 穩定，避免 TranscriptEditor 重複 init。
+  // 故意只看 project.id — store list 變化導致 project ref 變不必重 init editor。
   const source = useMemo(
     () => (itemId && project ? datasetEditorSource(Number(itemId), project) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [itemId, project?.id],
   );
 
