@@ -204,7 +204,7 @@ def merge_chunk_results(
         overlap_sec = float(get_settings().split_overlap_sec)
 
     out: list[dict] = []
-    for chunk, segs in zip(chunks, chunk_segments):
+    for chunk, segs in zip(chunks, chunk_segments, strict=False):
         for s in segs:
             offset_seg = {
                 **s,
