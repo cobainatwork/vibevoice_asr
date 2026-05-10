@@ -74,8 +74,8 @@ async def test_retry_once_then_success(chunk_factory):
     async def vllm_mock(audio_bytes, mime, dur, hotwords):
         call_count["n"] += 1
         if call_count["n"] == 1:
-            # depth 0: partial
-            return {"raw_text": '[]', "elapsed_sec": 0.1, "attempts": 3, "partial": True}
+            # depth 0: partial（attempts=1 對齊「depth 0 fail (1)」comment、跟下面 sub 的 attempts 加總一致）
+            return {"raw_text": '[]', "elapsed_sec": 0.1, "attempts": 1, "partial": True}
         # depth 1 sub_a / sub_b: success
         return {
             "raw_text": '[{"Start":0,"End":1,"Speaker":0,"Content":"sub"}]',
