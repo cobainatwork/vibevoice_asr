@@ -115,7 +115,7 @@ async def transcribe_with_retry(
 
     return ChunkOutcome(
         segments=merged_segs,
-        raw_text="\n--- depth {} sub ---\n".format(depth + 1).join(
+        raw_text=f"\n--- depth {depth + 1} sub ---\n".join(
             o.raw_text for o in sub_outcomes
         ),
         partial=any(o.partial for o in sub_outcomes),
