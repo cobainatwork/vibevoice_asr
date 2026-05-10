@@ -1,13 +1,15 @@
-# Frontend production nginx config
-# Serves static SPA + proxies /api/* to backend
+# Frontend production nginx config（envsubst template）
+# nginx:alpine 的 docker-entrypoint 會把 /etc/nginx/templates/*.template 跑
+# envsubst 後輸出到 /etc/nginx/conf.d/。NGINX_ENVSUBST_FILTER_VARIABLES 限定
+# 只替換我們指定的變數、避免誤替換 nginx 內建 $host / $remote_addr 等。
 
 server {
     listen 80;
     server_name _;
 
-    # Upload 上限對齊 backend BACKEND_MAX_UPLOAD_MB=500（.env.example）
-    # 改大時要同步改 .env、否則 backend FastAPI 仍會擋
-    client_max_body_size 500m;
+    # Upload 上限跟 backend BACKEND_MAX_UPLOAD_MB 一致（compose 透過 env 注入）。
+    # 兩端要對齊，否則小的那邊會擋上傳。
+    client_max_body_size ${BACKEND_MAX_UPLOAD_MB}m;
 
     root /usr/share/nginx/html;
     index index.html;

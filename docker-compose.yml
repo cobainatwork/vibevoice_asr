@@ -106,4 +106,6 @@ services:
       - "${FRONTEND_PORT:-5173}:80"
     environment:
       - VITE_API_BASE=http://localhost:${BACKEND_PORT:-8080}
+      # 同步 nginx client_max_body_size 與 backend 上限（envsubst 在 entrypoint 替換）
+      - BACKEND_MAX_UPLOAD_MB=${BACKEND_MAX_UPLOAD_MB:-500}
     restart: unless-stopped
