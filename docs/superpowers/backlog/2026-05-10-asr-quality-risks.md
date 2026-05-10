@@ -49,7 +49,38 @@
 
 目前 backend 對兩條路徑用同一個 `job_runner.run_transcribe` 入口、partial 同樣寫進 `Job.error` 欄位。M6 v1 API 必須依此設計對外契約。
 
-### 2.2 M6 brainstorming 必須敲定的決策
+### 2.2 M6 brainstorming 進度（2026-05-10 暫停轉 M5 完整版）
+
+#### 已決議題
+
+| 議題 | 決議 |
+|---|---|
+| 場景 | B（非同步上傳 + 後續查詢） |
+| 主路徑 | WSS /api/v1/transcribe（一次性上傳 + 連線中收結果） |
+| 短音檔捷徑 | POST /api/v1/transcribe/sync（≤ 2 分鐘） |
+| 斷線 fallback | GET /api/v1/jobs/{id}/result |
+| Webhook | M6 不做、留 backlog |
+| partial 契約 | **嚴格**（done = 完整覆蓋；partial → failed + 人工介入） |
+| raw_text 暴露 | **不對外暴露**（ASR 系統職責是準確率、segments 是最終產品） |
+
+#### 決策原則（重要、之後別忘）
+
+> 我們是 ASR 系統、提高準確率是我們的職責。不該把品質判定推給 QC、也不該透過
+> raw_text 暗示「原料思維」。partial fail 比例必須在 ship M6 前降到極低
+> （目標 < 3%）。**M5 完整版（partial chunk 自動再切再跑）排在 M6 之前 ship**，
+> 否則嚴格契約會頻繁觸發 fail、QC 端體驗差、整套契約失去意義。
+
+#### 未決議題（M5 完整版 ship 後續 M6 brainstorming 再決）
+
+- WS idle timeout（SPEC 暫定 60s + ping/pong）
+- Rate limit 策略（內測階段傾向不限）
+- Error code 對外暴露範圍（傾向收斂到 6-10 個對外 code）
+- partial 觸發 fail 後的具體 response shape
+- 是否帶 coverage_pct / gap_ranges metadata（嚴格契約下這些變得不必要、待確認）
+
+### 2.3 原本框架（保留作為決策過程紀錄）
+
+#### M6 brainstorming 必須敲定的決策
 
 #### a. response 欄位設計
 
