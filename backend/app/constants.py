@@ -81,9 +81,14 @@ def guess_mime(filename: str) -> str:
 # Source: vendor/VibeVoice/vllm_plugin/tests/test_api_auto_recover.py
 # ============================================================
 
-REPETITION_WINDOW_CHARS = 200
-REPETITION_MIN_SUBSTRING_LEN = 10
-REPETITION_MIN_OCCURRENCES = 3
+# 之前 200 / 10 / 3 對中文商業對話過於敏感：「就是」「我們」「品項」「易發票」
+# 短時間密集重複會誤判 repetition loop，導致長音檔每段都 partial 漏大量內容。
+# 放寬到 300 / 15 / 4：要更長重複片段、更多次出現才算。真正的 vLLM 無限生成
+# 同 phrase 仍能 catch（loop 通常一觸發就大量重複，window 拉長仍超標）；
+# 只是過濾掉中文自然重複的 false positive。
+REPETITION_WINDOW_CHARS = 300
+REPETITION_MIN_SUBSTRING_LEN = 15
+REPETITION_MIN_OCCURRENCES = 4
 RETRY_TEMPERATURES = [0.0, 0.2, 0.3, 0.4]
 MAX_VLLM_RETRIES = 3
 
