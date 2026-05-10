@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { Segment } from "../api/types";
 
 interface Props {
@@ -8,8 +9,19 @@ interface Props {
 }
 
 export function SegmentListItem({ segment, active, dirty, onClick }: Props) {
+  const ref = useRef<HTMLButtonElement>(null);
+
+  // active 變化時自動把這段 scroll 到 viewport 內，避免播放位移到視野外。
+  // block: "nearest" 只在不可見時 scroll，不會無謂跳動已可見的項目。
+  useEffect(() => {
+    if (active) {
+      ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [active]);
+
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       className={`w-full text-left px-3 py-2 border-b border-slate-100 cursor-pointer transition-colors duration-200 ${

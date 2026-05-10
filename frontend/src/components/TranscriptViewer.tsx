@@ -1,7 +1,9 @@
-import { useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Edit3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { WaveformPlayer, type WaveformHandle } from "./WaveformPlayer";
+import { SegmentListItem } from "./SegmentListItem";
+import { findActiveSegmentIdx } from "../lib/segmentLookup";
 import type { JobOut } from "../api/types";
 
 interface Props {
@@ -11,8 +13,9 @@ interface Props {
 }
 
 export function TranscriptViewer({ job, audioUrl, projectId }: Props) {
-  const segments = job.segments ?? [];
-  const [active, setActive] = useState<number | null>(segments.length > 0 ? 0 : null);
+  // useMemo 防止 ?? [] 每次 render 新建空陣列、進而 invalidate handleTimeUpdate 的 useCallback deps
+  const segments = useMemo(() => job.segments ?? [], [job.segments]);
+  const [active, setActive] = useState<number>(segments.length > 0 ? 0 : -1);
   const waveRef = useRef<WaveformHandle>(null);
 
   const focusSegment = (i: number) => {
@@ -20,6 +23,15 @@ export function TranscriptViewer({ job, audioUrl, projectId }: Props) {
     waveRef.current?.seek(segments[i].start_time);
     waveRef.current?.play();
   };
+
+  // 播放時跟隨同步 active segment；dedup 避免 region useEffect 高頻重建。
+  const handleTimeUpdate = useCallback(
+    (t: number) => {
+      const idx = findActiveSegmentIdx(segments, t);
+      if (idx !== -1 && idx !== active) setActive(idx);
+    },
+    [segments, active],
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-6">
@@ -41,30 +53,23 @@ export function TranscriptViewer({ job, audioUrl, projectId }: Props) {
         segments={segments}
         activeIdx={active}
         onRegionClick={focusSegment}
+        onTimeUpdate={handleTimeUpdate}
       />
 
       <div className="grid grid-cols-12 gap-4 mt-4">
         <div className="col-span-12 md:col-span-5 bg-white border border-slate-200 rounded-md overflow-hidden max-h-[60vh] overflow-y-auto">
           {segments.map((s, i) => (
-            <button
+            <SegmentListItem
               key={i}
-              type="button"
+              segment={s}
+              active={i === active}
+              dirty={false}
               onClick={() => focusSegment(i)}
-              className={`w-full text-left px-3 py-2 border-b border-slate-100 cursor-pointer transition-colors duration-200 ${
-                i === active ? "bg-blue-50 border-l-2 border-l-blue-500 pl-2.5" : "hover:bg-slate-50"
-              }`}
-            >
-              <div className="flex items-center gap-2 text-xs text-slate-500 font-mono mb-0.5">
-                <span>{s.start_time.toFixed(2)}</span>
-                <span>·</span>
-                <span>Sp{s.speaker_id}</span>
-              </div>
-              <div className="text-sm text-slate-900 line-clamp-2">{s.text}</div>
-            </button>
+            />
           ))}
         </div>
         <div className="col-span-12 md:col-span-7 bg-white border border-slate-200 rounded-md p-4">
-          {active !== null && segments[active] ? (
+          {active >= 0 && segments[active] ? (
             <>
               <div className="text-xs text-slate-500 mb-2">
                 <span className="font-mono">{segments[active].start_time.toFixed(2)} → {segments[active].end_time.toFixed(2)}</span>

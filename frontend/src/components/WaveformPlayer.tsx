@@ -21,10 +21,15 @@ interface Props {
   editable?: boolean;
   onRegionClick?: (idx: number) => void;
   onRegionResize?: (idx: number, newStart: number, newEnd: number) => void;
+  /**
+   * 播放時每次時間更新呼叫一次（wavesurfer ~30Hz）。
+   * 父層用此切換 active segment；caller 必須自行 dedup 避免高頻 re-render。
+   */
+  onTimeUpdate?: (currentSec: number) => void;
 }
 
 export const WaveformPlayer = forwardRef<WaveformHandle, Props>(function WaveformPlayer(
-  { audioUrl, segments, activeIdx, editable, onRegionClick, onRegionResize },
+  { audioUrl, segments, activeIdx, editable, onRegionClick, onRegionResize, onTimeUpdate },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,6 +39,13 @@ export const WaveformPlayer = forwardRef<WaveformHandle, Props>(function Wavefor
   const [muted, setMuted] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // 用 ref 持有最新 onTimeUpdate callback，避免 callback identity 改變
+  // 觸發整個 wavesurfer 銷毀重建（destroy + load 1MB+ 音檔極傷效能）。
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate;
+  }, [onTimeUpdate]);
 
   // create wavesurfer
   useEffect(() => {
@@ -52,7 +64,10 @@ export const WaveformPlayer = forwardRef<WaveformHandle, Props>(function Wavefor
     ws.load(audioUrl);
     ws.on("play", () => setPlaying(true));
     ws.on("pause", () => setPlaying(false));
-    ws.on("timeupdate", (t) => setTime(t));
+    ws.on("timeupdate", (t) => {
+      setTime(t);
+      onTimeUpdateRef.current?.(t);
+    });
     ws.on("ready", () => setDuration(ws.getDuration()));
     wsRef.current = ws;
     regionsPluginRef.current = regions;

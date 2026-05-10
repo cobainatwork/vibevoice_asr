@@ -26,7 +26,7 @@ let nextId = 1;
 
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
-  push: (level, message, timeoutMs) => {
+  push: (level: ToastLevel, message: string, timeoutMs?: number) => {
     const id = nextId++;
     const t: Toast = {
       id,
@@ -34,13 +34,13 @@ export const useToastStore = create<ToastState>((set) => ({
       message,
       timeoutMs: timeoutMs ?? defaultTimeouts[level],
     };
-    set((s) => ({ toasts: [...s.toasts, t].slice(-3) }));
+    set((s: ToastState) => ({ toasts: [...s.toasts, t].slice(-3) }));
     if (t.timeoutMs > 0) {
       setTimeout(() => {
-        set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) }));
+        set((s: ToastState) => ({ toasts: s.toasts.filter((x: Toast) => x.id !== id) }));
       }, t.timeoutMs);
     }
   },
-  dismiss: (id) =>
-    set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) })),
+  dismiss: (id: number) =>
+    set((s: ToastState) => ({ toasts: s.toasts.filter((x: Toast) => x.id !== id) })),
 }));
