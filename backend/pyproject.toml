@@ -43,6 +43,9 @@ openpyxl = "^3.1.2"
 pysrt = "^1.1.2"
 mutagen = "^1.47"
 
+# Text post-processing：簡轉繁（s2tw — 上游 VibeVoice 訓練偏簡體，本層強制台灣繁體輸出）
+opencc-python-reimplemented = "^0.1.7"
+
 # Docker control
 docker = "^7.0.0"
 

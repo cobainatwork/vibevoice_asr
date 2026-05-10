@@ -20,10 +20,12 @@ WORKDIR /app
 # 安裝 Python 依賴
 # 內測階段：包 dev deps（pytest / ruff / mypy）方便容器內跑單測。
 # 進入正式部署前可改 multi-stage 區分 prod / dev。
+# `poetry install` 失敗時 fallback 跑 lock --no-update：開發期改 pyproject 但忘了
+# 在 host 端 lock 時不擋 build；commit lock file 前 image 會自動 catch up。
 COPY backend/pyproject.toml backend/poetry.lock* ./
 RUN pip install --no-cache-dir poetry==1.8.3 \
     && poetry config virtualenvs.create false \
-    && poetry install --no-root
+    && (poetry install --no-root || (poetry lock --no-update && poetry install --no-root))
 
 # 複製應用程式碼
 COPY backend/app ./app

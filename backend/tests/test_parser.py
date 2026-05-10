@@ -2,13 +2,19 @@
 Tests for utils.parser — vLLM output parsing.
 
 These run against expected upstream output formats and edge cases.
-M2 milestone.
+M2 milestone（M3.5 後增 truncation salvage + OpenCC s2tw 後處理）。
 """
 from __future__ import annotations
 
 import pytest
 
 from app.utils.parser import parse_transcription
+
+
+def _opencc_unavailable() -> bool:
+    """OpenCC 沒裝 / init 失敗時 parser fallback noop，相關 test skip。"""
+    from app.utils.parser import _OPENCC
+    return _OPENCC is None
 
 
 def test_parse_clean_array():
@@ -139,3 +145,67 @@ def test_parse_root_neither_list_nor_dict():
     assert segs == []
     # 字串會被 _extract_json_object 找不到 [ 或 { → no_json_found
     assert dbg["validation_warnings"]
+
+
+# === Truncation recovery（vLLM 串流結尾被截案例）===
+
+
+def test_parse_truncated_array_salvages_complete_objects():
+    """vLLM 串流結尾被截在 segment 中間時，parser 應該救出已完整的前段。
+
+    模擬實際觀察到的 c4aa8900 case：
+      [{"Start":0,"End":2.37,"Content":"[Silence]"},  ← 缺 Speaker → skip
+       {"Start":2.37,"End":14.43,"Speaker":0,"Content":"hello"},  ← 完整
+       {"Start":14.43,"End":21.19,"Speaker":0,"Content":  ← 截斷
+
+    舊版 _extract_json_object 找不到 balanced bracket → 整個 raw 丟掉、segments=[]。
+    新版 salvage 已完成的 inner objects 並組成新 array。
+    """
+    raw = (
+        '[{"Start":0,"End":2.37,"Content":"[Silence]"},'
+        '{"Start":2.37,"End":14.43,"Speaker":0,"Content":"hello"},'
+        '{"Start":14.43,"End":21.19,"Speaker":0,"Content":'
+    )
+    segs, dbg = parse_transcription(raw)
+    assert len(segs) == 1
+    assert segs[0]["start_time"] == 2.37
+    assert segs[0]["text"] == "hello"
+    assert "truncated_json_salvaged" in dbg["validation_warnings"]
+    assert any("missing_keys" in w for w in dbg["validation_warnings"])
+
+
+def test_parse_balanced_array_does_not_trigger_salvage():
+    """完整 JSON 不應誤觸 salvage 路徑（debug 不該有 truncated 標記）。"""
+    raw = '[{"Start":0,"End":1,"Speaker":0,"Content":"x"}]'
+    _, dbg = parse_transcription(raw)
+    assert "truncated_json_salvaged" not in dbg["validation_warnings"]
+
+
+def test_parse_balanced_with_string_containing_brackets():
+    """字串內含 { } [ ] 不應干擾 balanced bracket 計數（之前 _extract_json_object 沒處理）。"""
+    raw = '[{"Start":0,"End":1,"Speaker":0,"Content":"text with {brace} and [bracket]"}]'
+    segs, dbg = parse_transcription(raw)
+    assert len(segs) == 1
+    # 簡體轉繁不影響英文，原樣保留
+    assert "{brace}" in segs[0]["text"]
+    assert "truncated_json_salvaged" not in dbg["validation_warnings"]
+
+
+# === 簡體 → 繁體後處理（OpenCC s2tw）===
+
+
+@pytest.mark.skipif(
+    _opencc_unavailable(),
+    reason="OpenCC not installed (parser falls back to noop)",
+)
+def test_parse_simplified_chinese_converted_to_traditional():
+    """上游 VibeVoice 偏簡體輸出；parser 應 s2tw 轉繁體。"""
+    raw = '[{"Start":0,"End":1,"Speaker":0,"Content":"WhyVoice发布了新模型"}]'
+    segs, _ = parse_transcription(raw)
+    assert len(segs) == 1
+    text = segs[0]["text"]
+    # 簡體「发」必須已被轉換（OpenCC 任何 s2* 規則都會處理）
+    assert "发" not in text, f"expected '发' to be converted, got {text!r}"
+    # 英文與「新模型」（簡繁同形）穩定保留
+    assert "WhyVoice" in text
+    assert "新模型" in text
