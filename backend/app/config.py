@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     split_overlap_sec: int = 5
     sync_audio_max_duration_sec: int = 120
 
+    # === ASR Pipeline ===
+    # 並行 chunk 推論上限（含 retry sub-chunks 共享同一 semaphore）。
+    # 預設 8：vLLM max_num_seqs=64 的 1/8、留空間給 admin 同時 transcribe。
+    chunk_concurrency: int = 8
+    # partial chunk 偵測後遞迴切半 retry 的最大深度（0=不 retry，2=最多 4 個 sub-sub-chunks）
+    chunk_retry_max_depth: int = 2
+
     # === Redis & Queue ===
     redis_url: str = "redis://redis:6379/0"
     worker_max_jobs: int = 8
