@@ -43,7 +43,8 @@ def _to_traditional(text: str) -> str:
     """Convert simplified → traditional (s2tw)；OpenCC 缺失時原樣回傳。"""
     if _OPENCC is None:
         return text
-    return _OPENCC.convert(text)
+    # OpenCC 套件無 type stub、convert() 推為 Any → 顯式 str() 包確保回傳型別正確
+    return str(_OPENCC.convert(text))
 
 
 # ============================================================
