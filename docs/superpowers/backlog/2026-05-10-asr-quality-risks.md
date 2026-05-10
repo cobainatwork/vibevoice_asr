@@ -1,10 +1,11 @@
 # ASR 品質保證風險清單
 
 > **記錄日**：2026-05-10
-> **狀態**：已暴露但未完整解決，admin 路徑可接受、v1 API 上線前必修
+> **狀態**：M5 完整版 ship 後重評估、M6 brainstorming 前置條件達成
 > **觸發點**：M6 v1 API brainstorming 第一個議題
 > **上下文**：M3.5 完成後 Linux + GPU 實機測試暴露的 vLLM repetition 行為，本檔
-> 集中記錄相關設計風險與已嘗試的緩解措施
+> 集中記錄相關設計風險與已嘗試的緩解措施。M5 完整版（partial retry + 並行）
+> 已 ship、待 user 實機驗收 partial 比例是否達 < 3% 目標
 
 ---
 
@@ -19,6 +20,7 @@
 | 不切段（M5 前） | N/A | 3 | 1/1 = 100% | ~5%（前 30 秒就 repetition） |
 | 切 13 段 + 舊 detection（200/10/3） | 55s + 5s overlap | 45 | 7/13 ≈ 54% | ~30% |
 | 切 13 段 + 放寬 detection（300/15/4） | 55s + 5s overlap | 97 | 2/13 ≈ 15% | ~85% |
+| **M5 完整版**：partial retry（max_depth=2）+ 並行 chunk | 55s + 5s overlap | **待測** | **目標 < 3%** | **目標 > 95%** |
 
 舊 detection 在中文商業對話的密集自然重複（「就是」「我們」「品項」「易發票」）會誤判為 repetition loop、提前中斷生成。放寬 window / substring length / occurrences 後 false positive 大幅減少。
 
@@ -35,6 +37,12 @@
 - **放寬 repetition detection**：`REPETITION_WINDOW_CHARS` 200 → 300、`MIN_SUBSTRING_LEN` 10 → 15、`MIN_OCCURRENCES` 3 → 4
 - **parser truncated salvage**：vLLM 串流被截在 segment 中間時、用 `json.JSONDecoder.raw_decode` 救出已完整的前段而非全部丟棄
 - **OpenCC s2tw 後處理**：上游模型偏簡體輸出，parser 統一轉繁體（保留 raw_text 原樣）
+- **M5 完整版（2026-05-10 ship）**：
+  - partial chunk 偵測 → 切半遞迴 retry（max_depth=2、深度 0→1→2 = 55s→30s→17s）
+  - `asyncio.gather` + `asyncio.Semaphore(8)` 並行 chunk 推論、retry sub-chunks 共用同一 semaphore
+  - `chunks_total` / `chunks_done` 看原始 chunks、retry 內部不外暴露
+  - `transcribe_with_retry` 函數位於 `app/services/job_runner.py`、`split_chunk_in_half` 位於 `audio_splitter.py`
+  - settings: `chunk_concurrency=8` / `chunk_retry_max_depth=2`
 
 ---
 
