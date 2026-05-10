@@ -159,3 +159,50 @@ async def test_concurrent_transcribe_via_semaphore(chunk_factory):
 
     assert in_flight["max"] <= 2, f"Semaphore 沒擋住、max in flight = {in_flight['max']}"
     assert len(outcome["segments"]) == 5  # 每 chunk 一 segment、共 5
+
+
+@pytest.mark.asyncio
+async def test_chunks_done_counter_excludes_retry_sub_chunks(chunk_factory):
+    """chunks_total / chunks_done 看原始 chunks、retry 內部 sub-chunks 不外暴露。"""
+    from app.config import get_settings
+    from app.services.job_runner import _transcribe_all_chunks
+
+    chunks = [chunk_factory(0, 55), chunk_factory(50, 105)]
+    state = {"job_id": "test_chunks_done", "hotwords": []}
+
+    progress_calls: list[tuple[int, int]] = []
+
+    async def fake_update(job_id, chunks_total, chunks_done):
+        progress_calls.append((chunks_total, chunks_done))
+
+    # 第一個 chunk depth 0 partial、retry 一次後 success
+    # 第二個 chunk depth 0 直接 success
+    call_count = {"n": 0}
+
+    async def vllm_mock(audio_bytes, mime, dur, hotwords):
+        call_count["n"] += 1
+        # call 1（chunk 0 depth 0）→ partial；其餘 success
+        partial = (call_count["n"] == 1)
+        return {
+            "raw_text": '[{"Start":0,"End":1,"Speaker":0,"Content":"x"}]',
+            "elapsed_sec": 0.05, "attempts": 1, "partial": partial,
+        }
+
+    fake_subs = [chunk_factory(0, 30), chunk_factory(25, 55)]
+    settings = get_settings()
+    settings.chunk_concurrency = 4
+    settings.chunk_retry_max_depth = 1  # 限 1 次防進深層
+
+    with patch("app.services.job_runner.VllmClient") as MockClient, \
+         patch("app.services.job_runner.split_chunk_in_half", return_value=fake_subs), \
+         patch("app.services.job_runner._update_progress", new=fake_update):
+        MockClient.return_value.transcribe = AsyncMock(side_effect=vllm_mock)
+        outcome = await _transcribe_all_chunks(settings, state, 105.0, chunks)
+
+    # chunks_total 永遠 = 2（原始 chunks 數）、不會因為 retry 變成 4
+    for total, done in progress_calls:
+        assert total == 2, f"chunks_total 漂移到 {total}（應永遠 = 2）"
+
+    # chunks_done 最終 = 2
+    assert progress_calls[-1] == (2, 2)
+    assert outcome["chunks_total"] == 2
