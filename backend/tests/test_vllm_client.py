@@ -196,3 +196,45 @@ async def test_mock_transcribe_includes_hotwords_in_text():
     result = await VllmClient._mock_transcribe(5.0, ["糖尿病", "胰島素"], None)
     assert "糖尿病" in result["raw_text"]
     assert "胰島素" in result["raw_text"]
+
+
+# === _raise_for_bad_status：4xx / 5xx 錯誤碼分類 ===
+
+
+@pytest.mark.asyncio
+async def test_raise_for_bad_status_200_no_raise():
+    """200 OK 直接 return、不該 raise。"""
+    import httpx
+
+    resp = httpx.Response(status_code=200, content=b"")
+    await VllmClient._raise_for_bad_status(resp)  # 不該 raise
+
+
+@pytest.mark.asyncio
+async def test_raise_for_bad_status_4xx_audio_unreadable():
+    """4xx → AUDIO_UNREADABLE。實例：MP4 demux 失敗時 vLLM 回 400 zero-size array。
+    用戶資料問題、retry 同檔無用、應對外回 HTTP 400。"""
+    import httpx
+
+    from app.errors import AppError, ErrorCode
+
+    resp = httpx.Response(
+        status_code=400,
+        content=b'{"error":{"message":"zero-size array..."}}',
+    )
+    with pytest.raises(AppError) as exc:
+        await VllmClient._raise_for_bad_status(resp)
+    assert exc.value.code == ErrorCode.AUDIO_UNREADABLE
+
+
+@pytest.mark.asyncio
+async def test_raise_for_bad_status_5xx_vllm_unavailable():
+    """5xx → VLLM_UNAVAILABLE。服務本身故障、retry 有意義、應對外回 HTTP 503。"""
+    import httpx
+
+    from app.errors import AppError, ErrorCode
+
+    resp = httpx.Response(status_code=503, content=b"service unavailable")
+    with pytest.raises(AppError) as exc:
+        await VllmClient._raise_for_bad_status(resp)
+    assert exc.value.code == ErrorCode.VLLM_UNAVAILABLE

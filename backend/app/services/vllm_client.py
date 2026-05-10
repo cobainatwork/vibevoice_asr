@@ -148,9 +148,23 @@ class VllmClient:
 
     @staticmethod
     async def _raise_for_bad_status(resp: httpx.Response) -> None:
+        """4xx 視為用戶資料問題（AUDIO_UNREADABLE），5xx 視為服務不可用（VLLM_UNAVAILABLE）。
+
+        分類依據：HTTP convention（4xx = client error）。實例：
+          - 400 zero-size array...：vLLM 端 ffmpeg demux 拿到 0 長度 audio
+          - 500 / 503：vLLM 服務本身故障 / 過載
+
+        前者 user 重送同檔案無用、後者 retry 有意義。errors.py 對應 HTTP
+        status：AUDIO_UNREADABLE → 400、VLLM_UNAVAILABLE → 503。
+        """
         if resp.status_code == 200:
             return
         body = (await resp.aread())[:200]
+        if 400 <= resp.status_code < 500:
+            raise AppError(
+                ErrorCode.AUDIO_UNREADABLE,
+                f"vLLM rejected audio (HTTP {resp.status_code}): {body!r}",
+            )
         raise AppError(
             ErrorCode.VLLM_UNAVAILABLE,
             f"vLLM HTTP {resp.status_code}: {body!r}",
