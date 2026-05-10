@@ -9,8 +9,8 @@ Pipeline:
   失敗 → _mark_failed：status=FAILED + error 欄位
 
 長音檔處理（M5 minimal viable）：duration > AUTO_SPLIT_THRESHOLD_SEC（預設 60s）
-時切成多 chunk file，序列推論後 merge_chunk_results 合併時間軸。每 chunk 完成
-更新 chunks_done / progress，前端 polling 拿到中段進度。Webhook 觸發在 M6 加入。
+時切成多 chunk file，並行推論（asyncio.gather + Semaphore）後合併時間軸。每 chunk
+完成更新 chunks_done / progress，前端 polling 拿到中段進度。Webhook 觸發在 M6 加入。
 
 See SPEC.md §3.4.2、§6.4、§14.2 (M2 acceptance).
 """
@@ -31,7 +31,6 @@ from app.errors import AppError, ErrorCode
 from app.models import Job, JobStatus, Project
 from app.services.audio_splitter import (
     Chunk,
-    merge_chunk_results,
     split_chunk_in_half,
     split_long_audio,
 )
@@ -200,49 +199,49 @@ async def _transcribe_all_chunks(
     duration: float,
     chunks: list[Chunk],
 ) -> dict[str, Any]:
-    """逐 chunk 呼 vLLM、parse、merge；單 chunk 路徑兼容（n=1 時走 _load_audio_for_vllm）。"""
+    """並行跑各 chunk（含 retry 遞迴），merge 後回 outcome。"""
     is_multi = len(chunks) > 1
     job_id = state["job_id"]
 
     if is_multi:
         await _update_progress(job_id, chunks_total=len(chunks), chunks_done=0)
 
-    client = VllmClient(settings.vllm_base_url)
-    chunk_segments_lists: list[list[dict]] = []
-    chunk_raw_texts: list[str] = []
-    parser_warnings: list[str] = []
-    total_attempts = 0
-    any_partial = False
+    sem = asyncio.Semaphore(settings.chunk_concurrency)
+    done_count = {"n": 0}
+    done_lock = asyncio.Lock()
 
-    for i, chunk in enumerate(chunks):
-        audio_bytes, mime = await _load_chunk_audio(chunk)
-        chunk_duration = chunk.end_offset_sec - chunk.start_offset_sec
-        result = await client.transcribe(
-            audio_bytes, mime, chunk_duration, state["hotwords"]
+    async def run_one(idx: int, chunk: Chunk) -> ChunkOutcome:
+        outcome = await transcribe_with_retry(
+            chunk,
+            depth=0,
+            max_depth=settings.chunk_retry_max_depth,
+            sem=sem,
+            vllm_base_url=settings.vllm_base_url,
+            hotwords=state["hotwords"],
         )
-        segs, debug = parse_transcription(result["raw_text"])
-        chunk_segments_lists.append(segs)
-        chunk_raw_texts.append(result["raw_text"])
-        if debug.get("validation_warnings"):
-            parser_warnings.extend(debug["validation_warnings"])
-        total_attempts += result["attempts"]
-        if result.get("partial"):
-            any_partial = True
-
         if is_multi:
-            await _update_progress(
-                job_id, chunks_total=len(chunks), chunks_done=i + 1
-            )
+            async with done_lock:
+                done_count["n"] += 1
+                await _update_progress(
+                    job_id, chunks_total=len(chunks), chunks_done=done_count["n"]
+                )
+        return outcome
 
-    merged_segments = merge_chunk_results(chunks, chunk_segments_lists)
+    outcomes = await asyncio.gather(*[run_one(i, c) for i, c in enumerate(chunks)])
+
+    # Merge：所有 outcomes 的 segments 已加 offset、合併排序
+    merged_segs: list[dict] = []
+    for o in outcomes:
+        merged_segs.extend(o.segments)
+    merged_segs.sort(key=lambda s: s["start_time"])
 
     return {
-        "raw_text": _join_chunk_raw_texts(chunk_raw_texts),
-        "segments": merged_segments,
-        "parser_debug": {"validation_warnings": parser_warnings},
+        "raw_text": _join_chunk_raw_texts([o.raw_text for o in outcomes]),
+        "segments": merged_segs,
+        "parser_debug": {"validation_warnings": []},
         "duration": duration,
-        "attempts": total_attempts,
-        "partial": any_partial,
+        "attempts": sum(o.attempts for o in outcomes),
+        "partial": any(o.partial for o in outcomes),
         "chunks_total": len(chunks),
     }
 

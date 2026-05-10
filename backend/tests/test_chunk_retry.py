@@ -123,3 +123,39 @@ async def test_retry_twice_reaches_max_depth(chunk_factory):
 
     assert outcome.partial is True
     assert outcome.depth_reached == 2  # 達上限 2
+
+
+@pytest.mark.asyncio
+async def test_concurrent_transcribe_via_semaphore(chunk_factory):
+    """N 個 chunks 並行跑、Semaphore 控併發 ≤ chunk_concurrency。"""
+    from app.config import get_settings
+    from app.services.job_runner import _transcribe_all_chunks
+
+    chunks = [chunk_factory(i * 50, (i + 1) * 50) for i in range(5)]
+    state = {"job_id": "test", "hotwords": []}
+
+    in_flight = {"max": 0, "current": 0}
+    lock = asyncio.Lock()
+
+    async def slow_transcribe(audio_bytes, mime, dur, hotwords):
+        async with lock:
+            in_flight["current"] += 1
+            in_flight["max"] = max(in_flight["max"], in_flight["current"])
+        await asyncio.sleep(0.05)  # 模擬 vLLM 處理
+        async with lock:
+            in_flight["current"] -= 1
+        return {
+            "raw_text": '[{"Start":0,"End":1,"Speaker":0,"Content":"x"}]',
+            "elapsed_sec": 0.05, "attempts": 1, "partial": False,
+        }
+
+    settings = get_settings()
+    settings.chunk_concurrency = 2  # 強制限 2 並發
+
+    with patch("app.services.job_runner.VllmClient") as MockClient, \
+         patch("app.services.job_runner._update_progress", new=AsyncMock()):
+        MockClient.return_value.transcribe = AsyncMock(side_effect=slow_transcribe)
+        outcome = await _transcribe_all_chunks(settings, state, 250.0, chunks)
+
+    assert in_flight["max"] <= 2, f"Semaphore 沒擋住、max in flight = {in_flight['max']}"
+    assert len(outcome["segments"]) == 5  # 每 chunk 一 segment、共 5
