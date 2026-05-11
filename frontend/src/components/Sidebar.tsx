@@ -1,4 +1,4 @@
-import { ChevronDown, Plus, Hash, Upload, Edit3, Activity, LucideIcon } from "lucide-react";
+import { ChevronDown, Plus, Hash, Upload, Edit3, Database, Activity, LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useProjectStore } from "../stores/projectStore";
@@ -13,6 +13,7 @@ interface SubPage {
 const SUBPAGES: SubPage[] = [
   { key: "hotwords", label: "Hotwords", icon: Hash },
   { key: "offline", label: "離線轉錄", icon: Upload },
+  { key: "datasets", label: "資料集", icon: Database },
   { key: "edit", label: "校正工作台", icon: Edit3, hidden: true }, // 從 Offline 進入，不直接顯示
 ];
 
