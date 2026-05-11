@@ -128,6 +128,7 @@ export function TranscriptEditor({ source, project: _project, viewLink }: Props)
               total={segments.length}
               speakerOptions={speakerOptions}
               onChange={handleSegmentChange}
+              onEditStart={() => waveRef.current?.pause()}
             />
           )}
         </div>

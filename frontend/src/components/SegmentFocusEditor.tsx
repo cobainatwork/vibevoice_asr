@@ -7,9 +7,11 @@ interface Props {
   total: number;
   speakerOptions: number[];
   onChange: (partial: Partial<Segment>) => void;
+  /** 任一輸入框獲得焦點時呼叫 — 校正員開始編輯，外層應暫停播放避免 active segment 跳走 */
+  onEditStart?: () => void;
 }
 
-export function SegmentFocusEditor({ segment, index, total, speakerOptions, onChange }: Props) {
+export function SegmentFocusEditor({ segment, index, total, speakerOptions, onChange, onEditStart }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // autosize
@@ -34,6 +36,7 @@ export function SegmentFocusEditor({ segment, index, total, speakerOptions, onCh
             step="0.05"
             value={segment.start_time}
             onChange={(e) => onChange({ start_time: Number(e.target.value) })}
+            onFocus={onEditStart}
             className="w-20 font-mono text-slate-900 bg-transparent outline-none"
           />
         </div>
@@ -44,6 +47,7 @@ export function SegmentFocusEditor({ segment, index, total, speakerOptions, onCh
             step="0.05"
             value={segment.end_time}
             onChange={(e) => onChange({ end_time: Number(e.target.value) })}
+            onFocus={onEditStart}
             className="w-20 font-mono text-slate-900 bg-transparent outline-none"
           />
         </div>
@@ -52,6 +56,7 @@ export function SegmentFocusEditor({ segment, index, total, speakerOptions, onCh
           <select
             value={segment.speaker_id}
             onChange={(e) => onChange({ speaker_id: Number(e.target.value) })}
+            onFocus={onEditStart}
             className="bg-transparent outline-none cursor-pointer text-slate-900"
           >
             {speakerOptions.map((sp) => <option key={sp} value={sp}>{sp}</option>)}
@@ -63,6 +68,7 @@ export function SegmentFocusEditor({ segment, index, total, speakerOptions, onCh
         ref={textareaRef}
         value={segment.text}
         onChange={(e) => onChange({ text: e.target.value })}
+        onFocus={onEditStart}
         className="w-full px-3 py-2 border-2 border-orange-300 rounded bg-white text-base text-slate-900 leading-relaxed resize-none outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors duration-200 min-h-[120px]"
       />
     </div>
