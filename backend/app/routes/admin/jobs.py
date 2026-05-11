@@ -246,17 +246,15 @@ def _validate_segments(segments: list[Segment]) -> None:
         raise http_error(
             ErrorCode.INVALID_SEGMENTS, "segments must not be empty"
         )
-    last_end = -1.0
+    # 移除 overlap raise：M5 並行切 chunk + merge 後相鄰段在 overlap 區自然會有
+    # 時間重疊（譬如 chunk 0 結尾跟 chunk 1 開頭都在 50-55s 區）。Editor 是讓 user
+    # 編輯校正、不該因為上游切段機制 byproduct 而擋住 save。dataset 製作（export
+    # 訓練 JSON）階段再嚴格 validate 無 overlap。
     for i, s in enumerate(segments):
         if s.start_time >= s.end_time:
             raise http_error(
                 ErrorCode.INVALID_SEGMENTS,
                 f"segment[{i}] start ({s.start_time}) >= end ({s.end_time})",
-            )
-        if s.start_time < last_end:
-            raise http_error(
-                ErrorCode.INVALID_SEGMENTS,
-                f"segment[{i}] overlaps previous (start {s.start_time} < prev end {last_end})",
             )
         if s.speaker_id < 0:
             raise http_error(
@@ -267,7 +265,6 @@ def _validate_segments(segments: list[Segment]) -> None:
             raise http_error(
                 ErrorCode.INVALID_SEGMENTS, f"segment[{i}] text is empty"
             )
-        last_end = s.end_time
 
 
 def _cleanup_audio_files(job: Job) -> None:
