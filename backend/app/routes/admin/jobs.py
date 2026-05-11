@@ -258,10 +258,10 @@ def _validate_segments(segments: list[Segment]) -> None:
                 ErrorCode.INVALID_SEGMENTS,
                 f"segment[{i}] overlaps previous (start {s.start_time} < prev end {last_end})",
             )
-        if s.speaker_id < 1:
+        if s.speaker_id < 0:
             raise http_error(
                 ErrorCode.INVALID_SEGMENTS,
-                f"segment[{i}] speaker_id must be >= 1, got {s.speaker_id}",
+                f"segment[{i}] speaker_id must be >= 0, got {s.speaker_id}",
             )
         if not s.text.strip():
             raise http_error(
