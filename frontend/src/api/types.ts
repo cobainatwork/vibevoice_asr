@@ -18,11 +18,15 @@ export interface ApiErrorBody {
 
 // === Project ===
 
+export type DenoiseModel = "gtcrn" | "zipenhancer";
+
 export interface ProjectIn {
   name: string;
   description?: string;
   hotwords?: string[];
   webhook_url?: string;
+  denoise_enabled?: boolean;
+  denoise_model?: DenoiseModel;
 }
 
 export interface ProjectPatch {
@@ -30,6 +34,8 @@ export interface ProjectPatch {
   description?: string;
   hotwords?: string[];
   webhook_url?: string;
+  denoise_enabled?: boolean;
+  denoise_model?: DenoiseModel;
 }
 
 export interface ProjectOut {
@@ -39,6 +45,8 @@ export interface ProjectOut {
   hotwords: string[];
   active_model_id: number | null;
   webhook_url: string | null;
+  denoise_enabled: boolean;
+  denoise_model: DenoiseModel;
   created_at: string;
   updated_at: string;
 }

@@ -5,7 +5,7 @@ import { ProjectFormModal } from "../components/ProjectFormModal";
 import { projectsApi } from "../api/projects";
 import { useProjectStore } from "../stores/projectStore";
 import { useToast } from "../hooks/useToast";
-import type { ProjectOut } from "../api/types";
+import type { DenoiseModel, ProjectOut } from "../api/types";
 
 export default function Projects() {
   const { projects, loaded, refetch } = useProjectStore();
@@ -17,13 +17,13 @@ export default function Projects() {
     if (!loaded) refetch();
   }, [loaded, refetch]);
 
-  const onCreate = async (data: { name: string; description?: string; webhook_url?: string; hotwords: string[] }) => {
+  const onCreate = async (data: { name: string; description?: string; webhook_url?: string; hotwords: string[]; denoise_enabled?: boolean; denoise_model?: DenoiseModel }) => {
     await projectsApi.create(data);
     toast.success(`已建立專案「${data.name}」`);
     await refetch();
   };
 
-  const onEdit = async (data: { name: string; description?: string; webhook_url?: string; hotwords: string[] }) => {
+  const onEdit = async (data: { name: string; description?: string; webhook_url?: string; hotwords: string[]; denoise_enabled?: boolean; denoise_model?: DenoiseModel }) => {
     if (!editing) return;
     await projectsApi.update(editing.id, data);
     toast.success(`已更新「${data.name}」`);
