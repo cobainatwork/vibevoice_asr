@@ -33,7 +33,7 @@
 - Modify: `backend/app/models.py`(JobSource enum + Job 欄位)
 - Modify: `backend/app/errors.py`(ErrorCode + HTTP_STATUS_FOR_CODE)
 - Modify: `backend/app/schemas.py`(JobOut + YoutubeImportIn)
-- Create: `backend/alembic/versions/<rev>_youtube_import_job_fields.py`
+- Create: `backend/migrations/versions/<rev>_youtube_import_job_fields.py`
 - Modify: `frontend/src/api/types.ts`(JobOut + JobSource enum)
 
 ### Steps
@@ -138,7 +138,7 @@ class YoutubeImportIn(BaseModel):
 docker compose exec backend alembic revision --autogenerate -m "youtube_import_job_fields"
 ```
 
-檢查產生的 migration 檔(`backend/alembic/versions/<rev>_youtube_import_job_fields.py`)應該包含:
+檢查產生的 migration 檔(`backend/migrations/versions/<rev>_youtube_import_job_fields.py`)應該包含:
 - `op.add_column("jobs", sa.Column("source_url", sa.String(500), nullable=True))`
 - `op.add_column("jobs", sa.Column("reference_subtitles", sa.JSON(), nullable=True))`
 - `op.add_column("jobs", sa.Column("reference_subtitle_lang", sa.String(16), nullable=True))`
@@ -193,7 +193,7 @@ Expected: 0 errors。
 - [ ] **Step 11: Commit**
 
 ```
-git add backend/app/models.py backend/app/errors.py backend/app/schemas.py backend/alembic/versions/ backend/tests/test_models_youtube.py frontend/src/api/types.ts
+git add backend/app/models.py backend/app/errors.py backend/app/schemas.py backend/migrations/versions/ backend/tests/test_models_youtube.py frontend/src/api/types.ts
 git commit -m "feat(youtube): Job 加 source_url / reference_subtitles 欄位 + 5 個錯誤碼"
 ```
 
