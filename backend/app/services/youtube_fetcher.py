@@ -9,6 +9,7 @@ yt-dlp 包裝層:probe(取 metadata、不下載)+ fetch(下載 audio + subtitle)
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,12 +41,12 @@ async def probe(url: str) -> VideoInfo:
     """
     取影片 metadata,不下載。
 
-    yt-dlp `--print "%(title)s|%(duration)s|%(availability)s" --skip-download <url>`
-    輸出單行 "Title|125.5|public"。
+    用 yt-dlp `--dump-json` 拿 JSON、不用 delimiter-based 解析
+   (title 可能含 '|' 字元,delimiter 會 mis-align、duration parse 炸出 502)。
     """
     cmd = [
         "yt-dlp",
-        "--print", "%(title)s|%(duration)s|%(availability)s",
+        "--dump-json",
         "--skip-download",
         "--no-warnings",
         url,
@@ -55,26 +56,35 @@ async def probe(url: str) -> VideoInfo:
     if rc != 0:
         _raise_for_yt_dlp_error(stderr)
 
-    line = stdout.decode("utf-8", errors="replace").strip()
-    parts = line.split("|")
-    if len(parts) < 3:
-        raise AppError(
-            ErrorCode.YOUTUBE_FETCH_FAILED,
-            f"unexpected probe output: {line[:200]}",
-        )
-    title, dur_str, avail = parts[0], parts[1], parts[2]
+    raw = stdout.decode("utf-8", errors="replace").strip()
     try:
-        duration = float(dur_str)
-    except ValueError as e:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
         raise AppError(
             ErrorCode.YOUTUBE_FETCH_FAILED,
-            f"bad duration in probe: {dur_str}",
+            f"bad probe JSON: {raw[:200]}",
         ) from e
 
+    title = data.get("title") or "untitled"
+    duration_raw = data.get("duration")
+    if duration_raw is None:
+        raise AppError(
+            ErrorCode.YOUTUBE_FETCH_FAILED,
+            "yt-dlp returned no duration field",
+        )
+    try:
+        duration = float(duration_raw)
+    except (TypeError, ValueError) as e:
+        raise AppError(
+            ErrorCode.YOUTUBE_FETCH_FAILED,
+            f"bad duration in probe: {duration_raw!r}",
+        ) from e
+
+    availability = (data.get("availability") or "public").lower()
     return VideoInfo(
         title=title,
         duration_sec=duration,
-        available=avail.lower() in ("public", "unlisted", "needs_auth"),
+        available=availability in ("public", "unlisted", "needs_auth"),
     )
 
 

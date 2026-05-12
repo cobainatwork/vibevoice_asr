@@ -13,8 +13,10 @@ from app.services.youtube_fetcher import (
 
 @pytest.mark.asyncio
 async def test_probe_success():
-    """yt-dlp 回 title|duration|available → VideoInfo。"""
-    fake_stdout = b"My Video|125.5|public\n"
+    """yt-dlp --dump-json 回 JSON → VideoInfo。"""
+    fake_stdout = (
+        b'{"title": "My Video", "duration": 125.5, "availability": "public"}\n'
+    )
     fake_stderr = b""
 
     proc = AsyncMock()
@@ -30,6 +32,26 @@ async def test_probe_success():
     assert info.title == "My Video"
     assert info.duration_sec == pytest.approx(125.5)
     assert info.available is True
+
+
+@pytest.mark.asyncio
+async def test_probe_title_with_pipe_char():
+    """title 含 '|' 字元(YouTube 常見、頻道名後綴),JSON 解析不會 mis-align。"""
+    fake_stdout = (
+        b'{"title": "Topic | Channel Name", "duration": 43, "availability": "public"}\n'
+    )
+    proc = AsyncMock()
+    proc.communicate = AsyncMock(return_value=(fake_stdout, b""))
+    proc.returncode = 0
+
+    with patch(
+        "app.services.youtube_fetcher.asyncio.create_subprocess_exec",
+        return_value=proc,
+    ):
+        info = await probe("https://youtu.be/abc")
+
+    assert info.title == "Topic | Channel Name"
+    assert info.duration_sec == pytest.approx(43.0)
 
 
 @pytest.mark.asyncio
