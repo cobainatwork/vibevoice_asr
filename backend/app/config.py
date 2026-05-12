@@ -49,12 +49,31 @@ class Settings(BaseSettings):
     # === Audio ===
     max_audio_duration_sec: int = 14400
     # 實測 vLLM 對 >60s 音檔容易陷入 repetition loop（理論上下文 65k 能吃到 55min
-    # 但生成穩定性實際只到 30-60s）。預設 60s threshold + 55s chunk + 5s overlap，
-    # 50s 步進。長音檔被切成 N 段獨立推論再 merge。
+    # 但生成穩定性實際只到 30-60s）。預設 60s threshold + 55s chunk。
+    # 長音檔被切成 N 段獨立推論再 merge。
     auto_split_threshold_sec: int = 60
     split_chunk_duration_sec: int = 55
+    # === 已廢棄（silence-based 切點不需要 overlap）、保留欄位避免 .env 破 ===
+    # split_overlap_sec 仍可在 .env 設、但 audio_splitter 不再讀。
     split_overlap_sec: int = 5
     sync_audio_max_duration_sec: int = 120
+
+    # === Silence-based slicer 參數（M+1 切換點）===
+    # silence detection RMS 振幅閾值（dB）。-40 是 audio-slicer 預設、適合多數錄音。
+    silence_threshold_db: float = -40.0
+
+    # 每段最短長度（ms）。audio-slicer 預設 5000 對歌曲設計；
+    # ASR 場景改 2000（短句保留、避免過度合併）。
+    silence_min_length_ms: int = 2000
+
+    # silence 至少多長才視為切點（ms）。
+    silence_min_interval_ms: int = 300
+
+    # RMS 計算窗口 hop size（ms）。
+    silence_hop_size_ms: int = 20
+
+    # 切點處保留前後 silence 的最大長度（ms）。
+    silence_max_kept_ms: int = 1000
 
     # === ASR Pipeline ===
     # 並行 chunk 推論上限（含 retry sub-chunks 共享同一 semaphore）。
