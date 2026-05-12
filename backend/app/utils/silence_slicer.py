@@ -72,10 +72,12 @@ class SilenceSlicer:
             raise ValueError(
                 "The following condition must be satisfied: max_sil_kept >= hop_size"
             )
-        min_interval = sr * min_interval / 1000
+        # upstream 原本把 min_interval 同名 reassign 成 sample 數(float),mypy 抱怨。
+        # 改成新變數名 _min_interval_samples,維持原邏輯不變。
+        _min_interval_samples = sr * min_interval / 1000
         self.threshold = 10 ** (threshold / 20.0)
         self.hop_size = round(sr * hop_size / 1000)
-        self.win_size = min(round(min_interval), 4 * self.hop_size)
+        self.win_size = min(round(_min_interval_samples), 4 * self.hop_size)
         self.min_length = round(sr * min_length / 1000 / self.hop_size)
         self.min_interval = round(min_interval / self.hop_size)
         self.max_sil_kept = round(sr * max_sil_kept / 1000 / self.hop_size)
