@@ -147,22 +147,15 @@ async def _run_subprocess(
 
 
 def _raise_for_yt_dlp_error(stderr: bytes) -> None:
-    """把 yt-dlp stderr 分類成對應 ErrorCode。"""
-    msg = stderr.decode("utf-8", errors="replace").lower()
+    """把 yt-dlp stderr 分類成對應 ErrorCode、同時印到 backend log 方便排查。"""
+    detail = stderr.decode("utf-8", errors="replace")[:500]
+    msg = detail.lower()
+    logger.warning("yt-dlp failure: %s", detail)
     if "video unavailable" in msg or "private video" in msg or "removed" in msg:
-        raise AppError(
-            ErrorCode.YOUTUBE_VIDEO_UNAVAILABLE,
-            stderr.decode("utf-8", errors="replace")[:500],
-        )
+        raise AppError(ErrorCode.YOUTUBE_VIDEO_UNAVAILABLE, detail)
     if "age" in msg and "restricted" in msg:
-        raise AppError(
-            ErrorCode.YOUTUBE_VIDEO_UNAVAILABLE,
-            stderr.decode("utf-8", errors="replace")[:500],
-        )
-    raise AppError(
-        ErrorCode.YOUTUBE_FETCH_FAILED,
-        stderr.decode("utf-8", errors="replace")[:500],
-    )
+        raise AppError(ErrorCode.YOUTUBE_VIDEO_UNAVAILABLE, detail)
+    raise AppError(ErrorCode.YOUTUBE_FETCH_FAILED, detail)
 
 
 def _find_subtitle(
