@@ -23,7 +23,7 @@ interface Props {
 }
 
 export function TranscriptEditor({ source, project: _project, viewLink }: Props) {
-  const { segments, activeIdx, saving, lastSavedAt, dirty, audioUrl, title } =
+  const { segments, activeIdx, saving, lastSavedAt, dirty, audioUrl, title, refSubs, refSubsLang, diffMode } =
     useEditorSelectors();
   const { init, reset, setActive, patchSegment, resizeSegment } =
     useEditorStore.getState();
@@ -87,6 +87,20 @@ export function TranscriptEditor({ source, project: _project, viewLink }: Props)
           </h1>
           <SaveStatusBadge saving={saving} dirty={dirty} lastSavedAt={lastSavedAt} />
         </div>
+        {refSubs && (
+          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={diffMode}
+              onChange={(e) => useEditorStore.getState().setDiffMode(e.target.checked)}
+              className="cursor-pointer"
+            />
+            對照 YouTube 字幕
+            {refSubsLang && (
+              <span className="text-xs text-slate-400">({refSubsLang})</span>
+            )}
+          </label>
+        )}
         {viewLink && (
           <Link
             to={viewLink}
@@ -116,6 +130,7 @@ export function TranscriptEditor({ source, project: _project, viewLink }: Props)
               segment={seg}
               active={i === activeIdx}
               dirty={isSegmentDirty(seg, originalSegments[i])}
+              refSubs={diffMode ? refSubs : null}
               onClick={() => focusSegment(i)}
             />
           ))}
@@ -208,8 +223,12 @@ function useEditorSelectors() {
   const isDirty = useEditorStore((s) => s.isDirty);
   const audioUrl = useEditorStore((s) => s.audioUrl);
   const title = useEditorStore((s) => s.title);
+  const refSubs = useEditorStore((s) => s.refSubs);
+  const refSubsLang = useEditorStore((s) => s.refSubsLang);
+  const diffMode = useEditorStore((s) => s.diffMode);
   return {
     segments, activeIdx, saving, lastSavedAt, audioUrl, title,
+    refSubs, refSubsLang, diffMode,
     dirty: isDirty(),
   };
 }

@@ -19,6 +19,11 @@ interface EditorState {
   durationSec: number;
   title: string;
 
+  // YT 字幕對照
+  refSubs: Segment[] | null;
+  refSubsLang: string | null;
+  diffMode: boolean;
+
   init: (source: EditorSource) => Promise<void>;
   reset: () => void;
   setActive: (idx: number) => void;
@@ -29,6 +34,7 @@ interface EditorState {
   save: () => Promise<void>;
   markSaved: (segments: Segment[]) => void;
   setSaving: (b: boolean) => void;
+  setDiffMode: (on: boolean) => void;
 }
 
 const INITIAL_STATE = {
@@ -41,6 +47,9 @@ const INITIAL_STATE = {
   audioUrl: "",
   durationSec: 0,
   title: "",
+  refSubs: null as Segment[] | null,
+  refSubsLang: null as string | null,
+  diffMode: false,
 };
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -58,6 +67,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       audioUrl: loaded.audioUrl,
       durationSec: loaded.durationSec,
       title: loaded.title,
+      refSubs: loaded.referenceSubtitles,
+      refSubsLang: loaded.referenceSubtitleLang,
+      diffMode: false,
     });
   },
   reset: () => set({ ...INITIAL_STATE }),
@@ -105,6 +117,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       saving: false,
     }),
   setSaving: (b) => set({ saving: b }),
+  setDiffMode: (on) => set({ diffMode: on }),
 }));
 
 
