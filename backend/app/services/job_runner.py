@@ -136,7 +136,6 @@ async def run_transcribe(job_id: str) -> None:
     asr_audio_path, was_denoised = maybe_denoise(
         Path(state["audio_path"]),
         denoise_enabled=state["denoise_enabled"],
-        denoise_model=state["denoise_model"],
     )
     state["audio_path"] = str(asr_audio_path)
 
@@ -178,7 +177,6 @@ async def _begin_running(job_id: str) -> dict[str, Any] | None:
             "duration_initial": job.duration_sec,
             "hotwords": list(project.hotwords) if project else [],
             "denoise_enabled": project.denoise_enabled if project else False,
-            "denoise_model": project.denoise_model if project else "gtcrn",
         }
         job.status = JobStatus.RUNNING
         job.started_at = datetime.utcnow()
