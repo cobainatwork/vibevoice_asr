@@ -57,6 +57,16 @@ export default function Offline() {
     }
   };
 
+  const onYoutubeUrl = async (url: string) => {
+    try {
+      await jobsApi.transcribeFromYoutube(url, projectId);
+      toast.success("已啟動 YouTube 下載，完成後自動進入 ASR 排程");
+      await fetchJobs();
+    } catch {
+      // client.ts 已 toast
+    }
+  };
+
   const onDelete = async (j: JobOut) => {
     if (!confirm(`確定刪除 Job ${j.filename}？此動作會一併刪除原始音檔。`)) return;
     try {
@@ -80,7 +90,7 @@ export default function Offline() {
         </button>
       </header>
 
-      <UploadDropzone onFile={onUpload} />
+      <UploadDropzone onFile={onUpload} onYoutubeUrl={onYoutubeUrl} />
 
       <h2 className="text-sm font-semibold text-slate-700 mt-6 mb-3">最近 Job（{jobs.length}）</h2>
       <JobList jobs={jobs} projectId={projectId} onDelete={onDelete} />
