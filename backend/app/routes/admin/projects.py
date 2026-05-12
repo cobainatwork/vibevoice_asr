@@ -37,12 +37,9 @@ async def list_projects(db: AsyncSession = Depends(get_db)):
 async def create_project(
     payload: ProjectIn, db: AsyncSession = Depends(get_db)
 ):
-    project = Project(
-        name=payload.name,
-        description=payload.description,
-        hotwords=payload.hotwords,
-        webhook_url=payload.webhook_url,
-    )
+    # 用 **model_dump() 帶所有欄位,避免手動列舉漏項
+    #(Task 1 加 denoise_enabled / denoise_model 時就是手動列舉漏掉的 bug)。
+    project = Project(**payload.model_dump())
     db.add(project)
     await _flush_or_409(db, name=payload.name)
     await db.refresh(project)
