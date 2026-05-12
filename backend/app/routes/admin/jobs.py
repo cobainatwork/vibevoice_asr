@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -21,9 +22,15 @@ from app.constants import guess_mime
 from app.db import get_db
 from app.errors import AppError, ErrorCode, http_error
 from app.models import Job, JobSource, JobStatus, Project
-from app.schemas import JobCreatedOut, JobOut, Segment, SegmentsPatchIn
-from app.services.queue import enqueue_transcribe
+from app.schemas import JobCreatedOut, JobOut, Segment, SegmentsPatchIn, YoutubeImportIn
+from app.services import youtube_fetcher
+from app.services.queue import enqueue_transcribe, enqueue_youtube_fetch
 from app.utils.audio import get_duration_sec
+
+YOUTUBE_URL_RE = re.compile(
+    r"^https?://(www\.)?(youtube\.com/(watch\?v=|shorts/)|youtu\.be/)",
+    re.IGNORECASE,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -55,6 +62,54 @@ async def transcribe_admin(
         job_id, project_id, duration,
     )
     return JobCreatedOut(job_id=job_id)
+
+
+@router.post("/transcribe/from_youtube", response_model=JobCreatedOut, status_code=202)
+async def transcribe_from_youtube(
+    payload: YoutubeImportIn,
+    db: AsyncSession = Depends(get_db),
+):
+    """從 YouTube URL 建 Job + 下載音訊 + 抓字幕、完成後自動跑 ASR。"""
+    settings = get_settings()
+    url = str(payload.url)
+    if not YOUTUBE_URL_RE.match(url):
+        raise http_error(
+            ErrorCode.YOUTUBE_INVALID_URL,
+            f"not a supported YouTube URL: {url[:200]}",
+        )
+
+    project = await _ensure_project(db, payload.project_id)
+    info = await youtube_fetcher.probe(url)
+
+    if info.duration_sec > settings.max_audio_duration_sec:
+        raise http_error(
+            ErrorCode.YOUTUBE_VIDEO_TOO_LONG,
+            f"video {info.duration_sec:.1f}s exceeds limit "
+            f"{settings.max_audio_duration_sec}s",
+        )
+
+    job = Job(
+        project_id=project.id,
+        source=JobSource.YOUTUBE_FETCH,
+        source_url=url,
+        filename=f"{info.title}.mp3",
+        audio_path="",  # youtube_fetch_job 完成後才填
+        duration_sec=info.duration_sec,
+        status=JobStatus.PENDING,
+        used_hotwords=list(project.hotwords or []),
+    )
+    db.add(job)
+    await db.flush()
+
+    await enqueue_youtube_fetch(job.id)
+    job.status = JobStatus.QUEUED
+    await db.flush()
+
+    logger.info(
+        "youtube fetch enqueued: job_id=%s project_id=%d duration=%.1f url=%s",
+        job.id, project.id, info.duration_sec, url[:100],
+    )
+    return JobCreatedOut(job_id=job.id)
 
 
 @router.get("/jobs", response_model=list[JobOut])

@@ -36,6 +36,16 @@ async def enqueue_transcribe(job_id: str) -> str:
     return job_id
 
 
+async def enqueue_youtube_fetch(job_id: str) -> str:
+    """Enqueue 一個 youtube_fetch_job。"""
+    pool = await get_pool()
+    await pool.enqueue_job(
+        "youtube_fetch_job", job_id,
+        _job_id=f"youtube_fetch:{job_id}",
+    )
+    return job_id
+
+
 async def enqueue_training(run_id: str) -> str:
     pool = await get_pool()
     await pool.enqueue_job("training_job", run_id, _job_id=f"training:{run_id}")

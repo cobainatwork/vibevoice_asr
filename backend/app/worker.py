@@ -38,6 +38,16 @@ async def transcribe_job(ctx: dict, job_id: str) -> str:
     return job_id
 
 
+async def youtube_fetch_job(ctx: dict, job_id: str) -> str:
+    """YouTube 下載 + 字幕解析、完成後接力給 transcribe_job。"""
+    from app.services.youtube_job_runner import run_youtube_fetch_job
+
+    logger.info("youtube_fetch_job started: %s", job_id)
+    await run_youtube_fetch_job(job_id)
+    logger.info("youtube_fetch_job finished: %s", job_id)
+    return job_id
+
+
 async def training_job(ctx: dict, run_id: str) -> str:
     """
     Run a LoRA fine-tuning training. See app/services/training_runner.py.
@@ -83,6 +93,7 @@ class WorkerSettings:
     """Arq Worker configuration."""
     functions: list[Any] = [
         transcribe_job,
+        youtube_fetch_job,
         training_job,
         merge_lora_job,
         webhook_delivery_job,
