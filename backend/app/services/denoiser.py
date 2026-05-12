@@ -40,12 +40,12 @@ _cache_lock = Lock()
 #   ZipEnhancer: 6s x 16000 = 96000 samples (最小 6s，模型需求)
 _MODEL_CONFIGS: dict[str, dict] = {
     "gtcrn": {
-        "filename": "GTCRN.onnx",
+        "filename": "gtcrn.onnx",
         "sample_rate": 16000,
         "chunk_size_samples": 480000,  # 30 seconds
     },
     "zipenhancer": {
-        "filename": "ZipEnhancer.onnx",
+        "filename": "zipenhancer.onnx",
         "sample_rate": 16000,
         "chunk_size_samples": 96000,   # 6 seconds (model minimum)
     },
