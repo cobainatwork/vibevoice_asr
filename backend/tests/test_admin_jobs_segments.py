@@ -55,15 +55,9 @@ async def test_patch_segments_replaces_segments(app_client):
     # start >= end
     ([{"start_time": 5.0, "end_time": 3.0, "speaker_id": 1, "text": "x"}],
      "start"),
-    # overlap
-    (
-        [
-            {"start_time": 0.0, "end_time": 5.0, "speaker_id": 1, "text": "a"},
-            {"start_time": 4.0, "end_time": 6.0, "speaker_id": 1, "text": "b"},
-        ],
-        "overlaps",
-    ),
-    # speaker_id < 1
+    # overlap 已移除（M5 並行切段後相鄰 chunk 在 overlap 區自然有時間重疊、
+    # editor 不該為了上游 byproduct 擋 save。見 c811fed）。
+    # speaker_id < 0
     ([{"start_time": 0.0, "end_time": 1.0, "speaker_id": -1, "text": "x"}],
      "speaker_id"),
     # empty text

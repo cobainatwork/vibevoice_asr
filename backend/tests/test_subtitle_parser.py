@@ -95,5 +95,7 @@ def test_normalize_subtitle_s2tw():
         {"start_time": 0.0, "end_time": 1.0, "speaker_id": 0, "text": "  软件优化   "},
     ]
     out = normalize_subtitle(raw)
-    # 期望值以台灣慣用詞為優先；若 OpenCC 實際輸出不同，調整此處
-    assert out[0]["text"] in ("軟體最佳化", "軟體優化")
+    # OpenCC s2tw 只做字級簡轉繁(「软件→軟件」「优化→優化」)、不轉台灣慣用詞
+    #(那需要 s2twp 含 TWPhrases.txt)。實際輸出「軟件優化」。
+    # 列三種合理輸出對應不同 OpenCC config 版本。
+    assert out[0]["text"] in ("軟件優化", "軟體優化", "軟體最佳化")

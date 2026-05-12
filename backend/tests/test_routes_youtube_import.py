@@ -11,7 +11,7 @@ from app.services.youtube_fetcher import VideoInfo
 async def test_transcribe_from_youtube_success(app_client):
     """成功：probe pass → 建 Job + enqueue。"""
     r = await app_client.post("/api/admin/projects", json={"name": "p1"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     project_id = r.json()["id"]
 
     with patch(
@@ -46,7 +46,7 @@ async def test_transcribe_from_youtube_success(app_client):
 async def test_transcribe_from_youtube_invalid_url(app_client):
     """非 YouTube URL → 400 YOUTUBE_INVALID_URL。"""
     r = await app_client.post("/api/admin/projects", json={"name": "p1"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     project_id = r.json()["id"]
 
     resp = await app_client.post(
@@ -73,7 +73,7 @@ async def test_transcribe_from_youtube_project_not_found(app_client):
 async def test_transcribe_from_youtube_video_too_long(app_client):
     """probe 回 duration 超過 max_audio_duration_sec → 400。"""
     r = await app_client.post("/api/admin/projects", json={"name": "p1"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     project_id = r.json()["id"]
 
     with patch(
@@ -97,7 +97,7 @@ async def test_transcribe_from_youtube_video_unavailable(app_client):
     from app.errors import AppError, ErrorCode
 
     r = await app_client.post("/api/admin/projects", json={"name": "p1"})
-    assert r.status_code == 200
+    assert r.status_code == 201
     project_id = r.json()["id"]
 
     with patch(
