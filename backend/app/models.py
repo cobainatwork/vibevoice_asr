@@ -19,6 +19,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy import (
     Enum as SAEnum,
@@ -177,6 +178,9 @@ class Job(Base):
     source_url: Mapped[str | None] = mapped_column(String(500))
     reference_subtitles: Mapped[list[dict] | None] = mapped_column(JSON)
     reference_subtitle_lang: Mapped[str | None] = mapped_column(String(16))
+    is_corrected: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default=text("0"),
+    )
 
     __table_args__ = (
         UniqueConstraint("project_id", "idempotency_key", name="uq_job_idempotency"),

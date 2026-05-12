@@ -82,3 +82,23 @@ async def test_patch_segments_404(app_client):
     )
     assert r.status_code == 404
     assert r.json()["detail"]["code"] == "job_not_found"
+
+
+@pytest.mark.asyncio
+async def test_patch_segments_resets_is_corrected(app_client):
+    """PATCH segments 後自動 unmark is_corrected(防 user 改完忘記重勾)。"""
+    project_id, job_id = await _seed_project_and_job(segments=[])
+    # 先勾 is_corrected=True
+    r = await app_client.patch(f"/api/admin/jobs/{job_id}", json={"is_corrected": True})
+    assert r.status_code == 200
+    assert r.json()["is_corrected"] is True
+
+    # 改 segments
+    segs = [{"start_time": 0.0, "end_time": 1.0, "speaker_id": 1, "text": "hello"}]
+    r = await app_client.patch(
+        f"/api/admin/jobs/{job_id}/segments",
+        json={"segments": segs},
+    )
+    assert r.status_code == 200
+    # 自動 unmark
+    assert r.json()["is_corrected"] is False

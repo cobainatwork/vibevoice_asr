@@ -22,7 +22,7 @@ from app.constants import guess_mime
 from app.db import get_db
 from app.errors import AppError, ErrorCode, http_error
 from app.models import Job, JobSource, JobStatus, Project
-from app.schemas import JobCreatedOut, JobOut, Segment, SegmentsPatchIn, YoutubeImportIn
+from app.schemas import JobCreatedOut, JobOut, JobPatch, Segment, SegmentsPatchIn, YoutubeImportIn
 from app.services import youtube_fetcher
 from app.services.queue import enqueue_transcribe, enqueue_youtube_fetch
 from app.utils.audio import get_duration_sec
@@ -122,6 +122,7 @@ async def list_jobs(
     project_id: int | None = None,
     source: str | None = None,
     status: str | None = None,
+    is_corrected: bool | None = None,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -133,6 +134,8 @@ async def list_jobs(
         stmt = stmt.where(Job.source == source)
     if status is not None:
         stmt = stmt.where(Job.status == status)
+    if is_corrected is not None:
+        stmt = stmt.where(Job.is_corrected == is_corrected)
     stmt = stmt.limit(limit).offset(offset)
     result = await db.execute(stmt)
     return result.scalars().all()
@@ -141,6 +144,21 @@ async def list_jobs(
 @router.get("/jobs/{job_id}", response_model=JobOut)
 async def get_job(job_id: str, db: AsyncSession = Depends(get_db)):
     return await _get_job_or_404(db, job_id)
+
+
+@router.patch("/jobs/{job_id}", response_model=JobOut)
+async def patch_job(
+    job_id: str,
+    payload: JobPatch,
+    db: AsyncSession = Depends(get_db),
+):
+    """Partial update of Job. 目前只支援 is_corrected。"""
+    job = await _get_job_or_404(db, job_id)
+    if payload.is_corrected is not None:
+        job.is_corrected = payload.is_corrected
+    await db.flush()
+    await db.refresh(job)
+    return job
 
 
 @router.delete("/jobs/{job_id}", status_code=204)
@@ -185,10 +203,15 @@ async def patch_segments(
     payload: SegmentsPatchIn,
     db: AsyncSession = Depends(get_db),
 ):
-    """更新 Job.segments（用於 TranscriptEditor 自動儲存）。"""
+    """更新 Job.segments（用於 TranscriptEditor 自動儲存）。
+
+    Side effect: 編輯 segments 後自動取消 is_corrected
+    (user 改了內容應該重新確認校正完成才進 dataset)。
+    """
     job = await _get_job_or_404(db, job_id)
     _validate_segments(payload.segments)
     job.segments = [s.model_dump() for s in payload.segments]
+    job.is_corrected = False  # 新加 side effect
     await db.flush()
     await db.refresh(job)
     return job

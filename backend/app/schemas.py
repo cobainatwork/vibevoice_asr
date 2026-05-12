@@ -161,6 +161,12 @@ class JobOut(BaseModel):
     source_url: str | None = None
     reference_subtitles: list[dict] | None = None
     reference_subtitle_lang: str | None = None
+    is_corrected: bool = False
+
+
+class JobPatch(BaseModel):
+    """Partial update for a Job. 目前只支援 is_corrected。"""
+    is_corrected: bool | None = None
 
 
 class YoutubeImportIn(BaseModel):
