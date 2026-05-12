@@ -46,7 +46,12 @@ export interface ProjectOut {
 // === Job ===
 
 export type JobStatus = "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
-export type JobSource = "admin_upload" | "v1_api_async" | "v1_api_sync" | "v1_api_ws";
+export type JobSource =
+  | "admin_upload"
+  | "youtube_fetch"
+  | "v1_api_async"
+  | "v1_api_sync"
+  | "v1_api_ws";
 
 export interface JobOut {
   id: string;
@@ -68,6 +73,9 @@ export interface JobOut {
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
+  source_url: string | null;
+  reference_subtitles: Segment[] | null;
+  reference_subtitle_lang: string | null;
 }
 
 export interface JobCreatedOut {

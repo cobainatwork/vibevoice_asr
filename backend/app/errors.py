@@ -75,6 +75,13 @@ class ErrorCode(str, Enum):
     INVALID_JOB_STATE = "invalid_job_state"
     AUDIO_DURATION_FAILED = "audio_duration_failed"
 
+    # === YouTube import errors ===
+    YOUTUBE_INVALID_URL = "youtube_invalid_url"
+    YOUTUBE_VIDEO_UNAVAILABLE = "youtube_video_unavailable"
+    YOUTUBE_VIDEO_TOO_LONG = "youtube_video_too_long"
+    YOUTUBE_NO_AUDIO = "youtube_no_audio"
+    YOUTUBE_FETCH_FAILED = "youtube_fetch_failed"
+
     # === Generic ===
     INTERNAL_ERROR = "internal_error"
 
@@ -114,6 +121,11 @@ HTTP_STATUS_FOR_CODE: dict[ErrorCode, int] = {
     ErrorCode.DATASET_NOT_FOUND: 404,
     ErrorCode.INVALID_JOB_STATE: 400,
     ErrorCode.AUDIO_DURATION_FAILED: 400,
+    ErrorCode.YOUTUBE_INVALID_URL: 400,
+    ErrorCode.YOUTUBE_VIDEO_UNAVAILABLE: 404,
+    ErrorCode.YOUTUBE_VIDEO_TOO_LONG: 400,
+    ErrorCode.YOUTUBE_NO_AUDIO: 422,
+    ErrorCode.YOUTUBE_FETCH_FAILED: 502,
     ErrorCode.INTERNAL_ERROR: 500,
 }
 

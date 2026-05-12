@@ -43,6 +43,7 @@ class JobStatus(str, enum.Enum):
 
 class JobSource(str, enum.Enum):
     ADMIN_UPLOAD = "admin_upload"
+    YOUTUBE_FETCH = "youtube_fetch"
     V1_API_ASYNC = "v1_api_async"
     V1_API_SYNC = "v1_api_sync"
     V1_API_WS = "v1_api_ws"
@@ -173,6 +174,9 @@ class Job(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    source_url: Mapped[str | None] = mapped_column(String(500))
+    reference_subtitles: Mapped[list[dict] | None] = mapped_column(JSON)
+    reference_subtitle_lang: Mapped[str | None] = mapped_column(String(16))
 
     __table_args__ = (
         UniqueConstraint("project_id", "idempotency_key", name="uq_job_idempotency"),

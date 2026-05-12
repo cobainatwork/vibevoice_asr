@@ -158,6 +158,14 @@ class JobOut(BaseModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+    source_url: str | None = None
+    reference_subtitles: list[dict] | None = None
+    reference_subtitle_lang: str | None = None
+
+
+class YoutubeImportIn(BaseModel):
+    url: HttpUrl
+    project_id: int
 
 
 class JobCreatedOut(BaseModel):
