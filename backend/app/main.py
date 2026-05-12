@@ -23,8 +23,15 @@ from fastapi.responses import JSONResponse
 from app.config import ensure_data_dirs, get_settings
 from app.errors import AppError
 
-# 讓 app.* logger 印 INFO log(預設 root logger WARNING 會吞掉 service-layer 訊息)。
-# uvicorn 自己的 access log 不受影響。
+# 讓 app.* logger 印 INFO log。
+# basicConfig(force=True) 重設 root handler level、確保 INFO 不被擋。
+# uvicorn 自己的 access log handler 獨立、不受影響。
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
+    force=True,
+)
 logging.getLogger("app").setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)

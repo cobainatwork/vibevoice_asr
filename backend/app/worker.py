@@ -14,8 +14,15 @@ from arq.connections import RedisSettings
 
 from app.config import get_settings
 
-# 讓 app.* logger 印 INFO log(預設 root logger WARNING 會吞掉 transcribe_job started /
-# denoiser: starting / split_long_audio 等訊息)。不動 root / arq / uvicorn 既有 config。
+# 讓 app.* logger 印 INFO log。
+# 用 basicConfig(force=True) 重設 root handler level(否則即使 logger level INFO,
+# root handler 還是 WARNING、INFO 被擋下)。
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
+    force=True,
+)
 logging.getLogger("app").setLevel(logging.INFO)
 
 logger = logging.getLogger(__name__)
