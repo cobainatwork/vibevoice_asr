@@ -18,7 +18,7 @@ import logging
 from datetime import datetime
 
 from app.config import get_settings
-from app.db import SessionLocal
+from app.db import db_session
 from app.errors import AppError, ErrorCode
 from app.models import Job, JobStatus
 from app.services import youtube_fetcher
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 async def run_youtube_fetch_job(job_id: str) -> None:
     """Entry point — 由 worker.youtube_fetch_job 呼叫。"""
-    async with SessionLocal() as db:
+    async with db_session() as db:
         job = await db.get(Job, job_id)
         if job is None:
             logger.info("youtube_fetch_job %s not found, skip", job_id)
@@ -58,7 +58,7 @@ async def _execute_fetch(job_id: str) -> None:
     job_dir = settings.upload_dir / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
 
-    async with SessionLocal() as db:
+    async with db_session() as db:
         job = await db.get(Job, job_id)
         if job is None or job.source_url is None:
             raise AppError(
@@ -77,7 +77,7 @@ async def _execute_fetch(job_id: str) -> None:
         ref_subs = normalize_subtitle(parsed)
         ref_lang = fetch.subtitle_lang
 
-    async with SessionLocal() as db:
+    async with db_session() as db:
         job = await db.get(Job, job_id)
         if job is None:
             return
@@ -94,7 +94,7 @@ async def _execute_fetch(job_id: str) -> None:
 async def _mark_failed(
     job_id: str, code: ErrorCode, detail: str,
 ) -> None:
-    async with SessionLocal() as db:
+    async with db_session() as db:
         job = await db.get(Job, job_id)
         if job is None:
             return
