@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { X } from "lucide-react";
-import type { DenoiseModel, ProjectOut } from "../api/types";
+import type { ProjectOut } from "../api/types";
 
 const schema = z.object({
   name: z.string().min(1, "必填").max(100),
@@ -11,7 +11,6 @@ const schema = z.object({
   webhook_url: z.string().url("格式不正確").optional().or(z.literal("")),
   hotwords_text: z.string().optional(), // 逗號或換行分隔
   denoise_enabled: z.boolean().optional(),
-  denoise_model: z.enum(["gtcrn", "zipenhancer"]).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -26,7 +25,6 @@ interface Props {
     webhook_url?: string;
     hotwords: string[];
     denoise_enabled?: boolean;
-    denoise_model?: DenoiseModel;
   }) => Promise<void>;
 }
 
@@ -39,10 +37,8 @@ function parseHotwords(text: string | undefined): string[] {
 }
 
 export function ProjectFormModal({ open, onClose, initial, onSubmit }: Props) {
-  const { register, handleSubmit, reset, watch, formState: { errors, isSubmitting } } =
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } =
     useForm<FormValues>({ resolver: zodResolver(schema) });
-
-  const denoiseEnabled = watch("denoise_enabled");
 
   useEffect(() => {
     if (open) {
@@ -52,7 +48,6 @@ export function ProjectFormModal({ open, onClose, initial, onSubmit }: Props) {
         webhook_url: initial?.webhook_url ?? "",
         hotwords_text: (initial?.hotwords ?? []).join("\n"),
         denoise_enabled: initial?.denoise_enabled ?? false,
-        denoise_model: (initial?.denoise_model ?? "gtcrn") as DenoiseModel,
       });
     }
   }, [open, initial, reset]);
@@ -66,7 +61,6 @@ export function ProjectFormModal({ open, onClose, initial, onSubmit }: Props) {
       webhook_url: values.webhook_url?.trim() || undefined,
       hotwords: parseHotwords(values.hotwords_text),
       denoise_enabled: values.denoise_enabled,
-      denoise_model: values.denoise_model,
     });
     onClose();
   });
@@ -106,21 +100,11 @@ export function ProjectFormModal({ open, onClose, initial, onSubmit }: Props) {
               />
               <span className="text-sm text-slate-700">啟用降噪（ASR 前處理）</span>
             </label>
-            {denoiseEnabled && (
-              <div className="mt-2 ml-6">
-                <label className="block text-sm text-slate-700">降噪模型</label>
-                <select
-                  {...register("denoise_model")}
-                  className="block w-full mt-1 border border-slate-300 rounded px-2 py-1 text-sm"
-                >
-                  <option value="gtcrn">GTCRN（輕量、快、品質基本可用）</option>
-                  <option value="zipenhancer">ZipEnhancer（高品質、慢約 100×）</option>
-                </select>
-                <p className="text-xs text-slate-500 mt-1">
-                  預設關閉。降噪僅用於 ASR 推論、不影響 dataset 落地的原始音檔。
-                </p>
-              </div>
-            )}
+            <p className="text-xs text-slate-500 mt-2 ml-6">
+              用 noisereduce 對音檔做 spectral gating 降噪。對穩定背景噪音
+              （office / 訪談 / 空調聲）效果好。僅用於 ASR 推論、不影響 dataset
+              落地的原始音檔。
+            </p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-slate-600 cursor-pointer hover:text-slate-900 transition-colors duration-200">取消</button>
