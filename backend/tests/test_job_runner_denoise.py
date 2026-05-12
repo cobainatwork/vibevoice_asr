@@ -26,7 +26,6 @@ async def _seed_job_with_denoise(denoise_enabled: bool) -> tuple[int, str]:
         project = Project(
             name=f"p_denoise_{uuid.uuid4().hex[:6]}",
             denoise_enabled=denoise_enabled,
-            denoise_model="gtcrn",
         )
         db.add(project)
         await db.flush()
