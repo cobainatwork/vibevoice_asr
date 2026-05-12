@@ -108,10 +108,6 @@ class Settings(BaseSettings):
     # === Observability ===
     metrics_enabled: bool = True
 
-    # === Audio Denoiser ===
-    # ONNX model 掛載路徑（docker compose 的 ./vendor/denoiser:/vendor/denoiser:ro）
-    denoiser_model_dir: str = "/vendor/denoiser"
-
     # === Dev / Mock ===
     # 啟用後 vllm_client.transcribe 不打 vLLM，回固定假 segments，
     # 給 Windows dev 機（無 GPU）走完整 pipeline 用。詳見 SPEC.md §5.6。

@@ -32,7 +32,7 @@ def test_maybe_denoise_enabled_writes_temp(tmp_path, monkeypatch):
     monkeypatch.setattr(
         audio_preprocessor,
         "denoise",
-        lambda waveform, sr, model_name: np.zeros_like(waveform),
+        lambda waveform, sr: np.zeros_like(waveform),
     )
 
     # mock _write_denoised_mp3 寫個假檔

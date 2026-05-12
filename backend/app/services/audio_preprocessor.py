@@ -45,15 +45,14 @@ def maybe_denoise(
     # 1. ffmpeg → 16kHz mono PCM int16 → numpy float32
     waveform, sr = _load_pcm(input_path)
 
-    # 2. denoise (可能 30s-1hr 視 model + audio 長度)
+    # 2. denoise (純 noisereduce，不需要 model_name)
     logger.info(
-        "denoiser: starting %s on %s (%.1fs audio)",
-        denoise_model,
+        "denoiser: starting on %s (%.1fs audio)",
         input_path.name,
         len(waveform) / sr,
     )
-    cleaned = denoise(waveform, sr, model_name=denoise_model)
-    logger.info("denoiser: finished %s", denoise_model)
+    cleaned = denoise(waveform, sr)
+    logger.info("denoiser: finished")
 
     # 3. 寫 cleaned waveform 回 temp mp3 (同 ASR 標準格式 16kHz mono)
     temp_path = _write_denoised_mp3(cleaned, sr)

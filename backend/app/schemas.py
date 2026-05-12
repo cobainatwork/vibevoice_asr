@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from app.models import (
     DatasetSource,
@@ -22,12 +22,6 @@ from app.models import (
     ModelType,
     TrainingStatus,
 )
-
-# ============================================================
-# Constants
-# ============================================================
-
-ALLOWED_DENOISE_MODELS = ("gtcrn", "zipenhancer")
 
 # ============================================================
 # Common
@@ -58,14 +52,6 @@ class ProjectIn(BaseModel):
     hotwords: list[str] = Field(default_factory=list)
     webhook_url: str | None = None
     denoise_enabled: bool = False
-    denoise_model: str = "gtcrn"
-
-    @field_validator("denoise_model")
-    @classmethod
-    def _check_denoise_model(cls, v: str) -> str:
-        if v not in ALLOWED_DENOISE_MODELS:
-            raise ValueError(f"denoise_model must be one of {ALLOWED_DENOISE_MODELS}")
-        return v
 
 
 class ProjectPatch(BaseModel):
@@ -74,14 +60,6 @@ class ProjectPatch(BaseModel):
     hotwords: list[str] | None = None
     webhook_url: str | None = None
     denoise_enabled: bool | None = None
-    denoise_model: str | None = None
-
-    @field_validator("denoise_model")
-    @classmethod
-    def _check_denoise_model(cls, v: str | None) -> str | None:
-        if v is not None and v not in ALLOWED_DENOISE_MODELS:
-            raise ValueError(f"denoise_model must be one of {ALLOWED_DENOISE_MODELS}")
-        return v
 
 
 class ProjectOut(BaseModel):
@@ -93,7 +71,6 @@ class ProjectOut(BaseModel):
     active_model_id: int | None
     webhook_url: str | None
     denoise_enabled: bool
-    denoise_model: str
     created_at: datetime
     updated_at: datetime
 

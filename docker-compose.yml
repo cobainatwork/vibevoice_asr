@@ -63,7 +63,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/data
       - ./vendor/VibeVoice:/vendor/VibeVoice:ro
-      - ./vendor/denoiser:/vendor/denoiser:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -87,7 +86,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/data
       - ./vendor/VibeVoice:/vendor/VibeVoice:ro
-      - ./vendor/denoiser:/vendor/denoiser:ro
     depends_on:
       redis:
         condition: service_healthy
