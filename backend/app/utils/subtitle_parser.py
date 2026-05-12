@@ -25,12 +25,12 @@ _WHITESPACE_RUN_RE = re.compile(r"\s+")
 
 def parse_vtt(text: str) -> list[dict]:
     """解析 WEBVTT 內容為 segment list。"""
-    return _parse_cues(text, time_sep=".")
+    return _parse_cues(text)
 
 
 def parse_srt(text: str) -> list[dict]:
     """解析 SubRip 內容為 segment list。"""
-    return _parse_cues(text, time_sep=",")
+    return _parse_cues(text)
 
 
 def normalize_subtitle(segments: list[dict]) -> list[dict]:
@@ -50,18 +50,18 @@ def normalize_subtitle(segments: list[dict]) -> list[dict]:
 # === Helpers ===
 
 
-def _parse_cues(text: str, time_sep: str) -> list[dict]:
-    """共用 cue 解析。SRT 用 ',' 分秒、VTT 用 '.'。"""
+def _parse_cues(text: str) -> list[dict]:
+    """共用 cue 解析。timestamp regex 同時接受 ',' (SRT) 與 '.' (VTT) 分隔符。"""
     segments: list[dict] = []
     blocks = re.split(r"\n\s*\n", text.strip())
     for block in blocks:
-        seg = _parse_one_cue(block, time_sep)
+        seg = _parse_one_cue(block)
         if seg is not None:
             segments.append(seg)
     return segments
 
 
-def _parse_one_cue(block: str, time_sep: str) -> dict | None:
+def _parse_one_cue(block: str) -> dict | None:
     lines = [ln for ln in block.splitlines() if ln.strip()]
     if not lines:
         return None
