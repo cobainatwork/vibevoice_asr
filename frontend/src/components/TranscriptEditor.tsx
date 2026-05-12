@@ -9,6 +9,7 @@ import { useAutoSave } from "../hooks/useAutoSave";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useTimeUpdateActiveSync } from "../hooks/useTimeUpdateActiveSync";
 import { useToast } from "../hooks/useToast";
+import { matchSubtitle, SIMILARITY_THRESHOLD } from "../lib/subtitleDiff";
 import type { EditorSource } from "../lib/editorSource";
 import type { ProjectOut, Segment } from "../api/types";
 
@@ -136,6 +137,12 @@ export function TranscriptEditor({ source, project: _project, viewLink }: Props)
           ))}
         </div>
         <div className="col-span-12 md:col-span-7">
+          {diffMode && refSubs && segments[activeIdx] && (
+            <ReferenceSubtitleCompare
+              activeSegment={segments[activeIdx]}
+              refSubs={refSubs}
+            />
+          )}
           {segments[activeIdx] && (
             <SegmentFocusEditor
               segment={segments[activeIdx]}
@@ -186,6 +193,63 @@ function SaveStatusBadge({ saving, dirty, lastSavedAt }: {
     );
   }
   return <p className="text-xs mt-1 text-slate-500">無變更</p>;
+}
+
+
+function ReferenceSubtitleCompare({
+  activeSegment,
+  refSubs,
+}: {
+  activeSegment: Segment;
+  refSubs: Segment[];
+}) {
+  const match = matchSubtitle(refSubs, activeSegment);
+
+  if (!match) {
+    return (
+      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 mb-3 text-xs text-slate-500">
+        此段無對應 YouTube 字幕(時段不重疊)
+      </div>
+    );
+  }
+
+  const isLowSim = match.similarity < SIMILARITY_THRESHOLD;
+  return (
+    <div
+      className={`border rounded-md p-3 mb-3 ${
+        isLowSim
+          ? "bg-red-50 border-red-200"
+          : "bg-slate-50 border-slate-200"
+      }`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
+          YouTube 字幕對照
+        </span>
+        <span
+          className={`text-xs font-mono ${
+            isLowSim ? "text-red-600 font-semibold" : "text-slate-500"
+          }`}
+        >
+          相似度 {(match.similarity * 100).toFixed(0)}%
+        </span>
+      </div>
+      <div className="space-y-2">
+        <div>
+          <div className="text-xs text-slate-500 mb-0.5">ASR</div>
+          <p className="text-sm text-slate-900 leading-relaxed whitespace-pre-wrap">
+            {activeSegment.text}
+          </p>
+        </div>
+        <div>
+          <div className="text-xs text-slate-500 mb-0.5">YouTube</div>
+          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+            {match.text}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 

@@ -42,6 +42,16 @@ export function SegmentListItem({
         <span>{segment.start_time.toFixed(2)}</span>
         <span>·</span>
         <span>Sp{segment.speaker_id}</span>
+        {match && (
+          <span
+            className={`text-xs font-mono ${
+              isLowSim ? "text-red-600 font-semibold" : "text-slate-400"
+            }`}
+            title={isLowSim ? "差異大,點選後右側查看完整對照" : "與 YT 字幕高度相符"}
+          >
+            YT {(match.similarity * 100).toFixed(0)}%
+          </span>
+        )}
         {dirty && (
           <span
             className="ml-auto w-1.5 h-1.5 rounded-full bg-amber-500"
@@ -50,18 +60,6 @@ export function SegmentListItem({
         )}
       </div>
       <div className="text-sm text-slate-900 line-clamp-2">{segment.text}</div>
-      {match && (
-        <div className="mt-1 text-xs italic text-slate-400 line-clamp-2">
-          YT: {match.text}
-          <span
-            className={`ml-2 not-italic ${
-              isLowSim ? "text-red-600" : "text-slate-400"
-            }`}
-          >
-            ({(match.similarity * 100).toFixed(0)}%)
-          </span>
-        </div>
-      )}
     </button>
   );
 }
