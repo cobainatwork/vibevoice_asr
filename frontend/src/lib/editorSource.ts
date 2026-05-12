@@ -7,6 +7,9 @@ export interface EditorLoadResult {
   audioUrl: string;
   durationSec: number;
   title: string; // 標頭顯示用，例如 "audio.wav" 或 "Dataset #12"
+  // 新增：YT 對照參考字幕（只有 source=YOUTUBE_FETCH 的 Job 才有）
+  referenceSubtitles: Segment[] | null;
+  referenceSubtitleLang: string | null;
 }
 
 export interface EditorSource {
@@ -28,6 +31,8 @@ export function jobEditorSource(jobId: string, _project: ProjectOut): EditorSour
         audioUrl: jobsApi.audioUrl(jobId),
         durationSec: job.duration_sec ?? 0,
         title: job.filename,
+        referenceSubtitles: job.reference_subtitles ?? null,
+        referenceSubtitleLang: job.reference_subtitle_lang ?? null,
       };
     },
     async save(snapshot) {
@@ -55,6 +60,8 @@ export function datasetEditorSource(itemId: number, _project: ProjectOut): Edito
         audioUrl: datasetsApi.audioUrl(itemId),
         durationSec: item.duration_sec,
         title: `Dataset #${itemId}`,
+        referenceSubtitles: null,
+        referenceSubtitleLang: null,
       };
     },
     async save(snapshot) {

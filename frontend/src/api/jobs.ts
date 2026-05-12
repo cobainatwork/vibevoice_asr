@@ -18,6 +18,12 @@ export const jobsApi = {
     return api.postForm<JobCreatedOut>(`${ADMIN}/transcribe`, fd);
   },
 
+  transcribeFromYoutube: (url: string, projectId: number) =>
+    api.post<JobCreatedOut>(`${ADMIN}/transcribe/from_youtube`, {
+      url,
+      project_id: projectId,
+    }),
+
   patchSegments: (id: string, segments: Segment[]) =>
     api.patch<JobOut>(`${ADMIN}/jobs/${id}/segments`, { segments }),
 };
