@@ -79,7 +79,12 @@ async def transcribe_from_youtube(
         )
 
     project = await _ensure_project(db, payload.project_id)
-    info = await youtube_fetcher.probe(url)
+    try:
+        info = await youtube_fetcher.probe(url)
+    except AppError as e:
+        # probe 直接 raise AppError 會走 app_error_handler 變扁平 body;
+        # admin 端點統一用 http_error 包裝(對齊 _ensure_project / http_error 風格)。
+        raise http_error(e.code, e.detail) from e
 
     if info.duration_sec > settings.max_audio_duration_sec:
         raise http_error(
