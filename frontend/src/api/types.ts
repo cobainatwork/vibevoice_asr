@@ -24,6 +24,7 @@ export interface ProjectIn {
   hotwords?: string[];
   webhook_url?: string;
   denoise_enabled?: boolean;
+  playback_speed?: number;
 }
 
 export interface ProjectPatch {
@@ -32,6 +33,7 @@ export interface ProjectPatch {
   hotwords?: string[];
   webhook_url?: string;
   denoise_enabled?: boolean;
+  playback_speed?: number;
 }
 
 export interface ProjectOut {
@@ -42,6 +44,7 @@ export interface ProjectOut {
   active_model_id: number | null;
   webhook_url: string | null;
   denoise_enabled: boolean;
+  playback_speed: number;
   created_at: string;
   updated_at: string;
 }

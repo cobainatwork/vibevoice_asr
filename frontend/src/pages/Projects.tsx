@@ -17,13 +17,13 @@ export default function Projects() {
     if (!loaded) refetch();
   }, [loaded, refetch]);
 
-  const onCreate = async (data: { name: string; description?: string; webhook_url?: string; hotwords: string[]; denoise_enabled?: boolean }) => {
+  const onCreate = async (data: { name: string; description?: string; webhook_url?: string; hotwords: string[]; denoise_enabled?: boolean; playback_speed?: number }) => {
     await projectsApi.create(data);
     toast.success(`已建立專案「${data.name}」`);
     await refetch();
   };
 
-  const onEdit = async (data: { name: string; description?: string; webhook_url?: string; hotwords: string[]; denoise_enabled?: boolean }) => {
+  const onEdit = async (data: { name: string; description?: string; webhook_url?: string; hotwords: string[]; denoise_enabled?: boolean; playback_speed?: number }) => {
     if (!editing) return;
     await projectsApi.update(editing.id, data);
     toast.success(`已更新「${data.name}」`);

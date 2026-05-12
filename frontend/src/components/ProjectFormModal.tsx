@@ -11,6 +11,7 @@ const schema = z.object({
   webhook_url: z.string().url("格式不正確").optional().or(z.literal("")),
   hotwords_text: z.string().optional(), // 逗號或換行分隔
   denoise_enabled: z.boolean().optional(),
+  playback_speed: z.number().min(0.5).max(2.0).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -25,6 +26,7 @@ interface Props {
     webhook_url?: string;
     hotwords: string[];
     denoise_enabled?: boolean;
+    playback_speed?: number;
   }) => Promise<void>;
 }
 
@@ -48,6 +50,7 @@ export function ProjectFormModal({ open, onClose, initial, onSubmit }: Props) {
         webhook_url: initial?.webhook_url ?? "",
         hotwords_text: (initial?.hotwords ?? []).join("\n"),
         denoise_enabled: initial?.denoise_enabled ?? false,
+        playback_speed: initial?.playback_speed ?? 1.0,
       });
     }
   }, [open, initial, reset]);
@@ -61,6 +64,7 @@ export function ProjectFormModal({ open, onClose, initial, onSubmit }: Props) {
       webhook_url: values.webhook_url?.trim() || undefined,
       hotwords: parseHotwords(values.hotwords_text),
       denoise_enabled: values.denoise_enabled,
+      playback_speed: values.playback_speed,
     });
     onClose();
   });
@@ -104,6 +108,24 @@ export function ProjectFormModal({ open, onClose, initial, onSubmit }: Props) {
               用 noisereduce 對音檔做 spectral gating 降噪。對穩定背景噪音
               （office / 訪談 / 空調聲）效果好。僅用於 ASR 推論、不影響 dataset
               落地的原始音檔。
+            </p>
+          </div>
+          <div className="border-t pt-3 mt-3">
+            <label className="block text-sm text-slate-700 mb-1">
+              ASR 推論速度調整（playback_speed）
+            </label>
+            <input
+              type="number"
+              step="0.05"
+              min="0.5"
+              max="2.0"
+              {...register("playback_speed", { valueAsNumber: true })}
+              className="w-32 border border-slate-300 rounded px-2 py-1 text-sm"
+            />
+            <p className="text-xs text-slate-500 mt-1">
+              1.0 = 原速（預設）、&lt; 1 = 拉慢音檔（客服快語速場景設 0.7-0.8）、
+              &gt; 1 = 加速（短音檔節省處理時間）。
+              範圍 0.5-2.0。Segments 時間戳會自動 scale 回原時間軸。
             </p>
           </div>
           <div className="flex justify-end gap-2 pt-2">
