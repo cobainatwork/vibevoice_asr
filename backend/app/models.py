@@ -108,9 +108,6 @@ class Project(Base):
     denoise_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default=text("0"),
     )
-    denoise_model: Mapped[str] = mapped_column(
-        String(20), default="gtcrn", nullable=False, server_default=text("'gtcrn'"),
-    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
