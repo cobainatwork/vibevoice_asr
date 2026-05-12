@@ -29,7 +29,12 @@ from app.constants import guess_mime
 from app.db import db_session
 from app.errors import AppError, ErrorCode
 from app.models import Job, JobStatus, Project
-from app.services.audio_preprocessor import cleanup_denoised, maybe_denoise
+from app.services.audio_preprocessor import (
+    cleanup_adjusted_speed,
+    cleanup_denoised,
+    maybe_adjust_speed,
+    maybe_denoise,
+)
 from app.services.audio_splitter import (
     Chunk,
     split_chunk_in_half,
@@ -131,7 +136,7 @@ async def run_transcribe(job_id: str) -> None:
     if state is None:
         return
 
-    # Audio preprocessing：denoise（若 project 啟用）
+    # Audio preprocessing Stage 1：denoise（若 project 啟用）
     # job.audio_path DB 欄位不動；state["audio_path"] 只是執行期 in-memory、安全覆寫。
     asr_audio_path, was_denoised = maybe_denoise(
         Path(state["audio_path"]),
@@ -139,8 +144,19 @@ async def run_transcribe(job_id: str) -> None:
     )
     state["audio_path"] = str(asr_audio_path)
 
+    # Audio preprocessing Stage 2：maybe adjust speed（若 playback_speed != 1.0）
+    speed_adjusted_path, was_speed_adjusted = maybe_adjust_speed(
+        Path(state["audio_path"]),
+        playback_speed=state["playback_speed"],
+    )
+    state["audio_path"] = str(speed_adjusted_path)
+
     try:
         outcome = await _do_transcribe(get_settings(), state)
+        if state["playback_speed"] != 1.0:
+            outcome["segments"] = _scale_segments(
+                outcome["segments"], state["playback_speed"],
+            )
         await _persist_success(job_id, state, outcome)
         logger.info(
             "transcribe_job DONE id=%s segments=%d attempts=%d partial=%s chunks=%d",
@@ -156,8 +172,29 @@ async def run_transcribe(job_id: str) -> None:
         logger.exception("transcribe_job CRASHED id=%s", job_id)
         raise  # 讓 arq retry / DLQ 機制接手
     finally:
+        if was_speed_adjusted:
+            cleanup_adjusted_speed(speed_adjusted_path)
         if was_denoised:
             cleanup_denoised(asr_audio_path)
+
+
+# === Segment helpers ===
+
+
+def _scale_segments(segments: list[dict], playback_speed: float) -> list[dict]:
+    """Scale segment timestamps × playback_speed 回原 timeline。
+
+    ASR 推論在已調速的音檔上跑，得到的時間戳是「調速後」時間軸。
+    乘以 playback_speed 還原回原始音檔的時間軸。
+    """
+    out = []
+    for s in segments:
+        out.append({
+            **s,
+            "start_time": round(s["start_time"] * playback_speed, 3),
+            "end_time": round(s["end_time"] * playback_speed, 3),
+        })
+    return out
 
 
 # === Stage helpers ===
@@ -177,6 +214,7 @@ async def _begin_running(job_id: str) -> dict[str, Any] | None:
             "duration_initial": job.duration_sec,
             "hotwords": list(project.hotwords) if project else [],
             "denoise_enabled": project.denoise_enabled if project else False,
+            "playback_speed": project.playback_speed if project else 1.0,
         }
         job.status = JobStatus.RUNNING
         job.started_at = datetime.utcnow()

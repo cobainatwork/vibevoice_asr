@@ -9,6 +9,7 @@ Caller (job_runner) 責任清理 temp file。
 from __future__ import annotations
 
 import logging
+import math
 import os
 import subprocess
 import tempfile
@@ -67,6 +68,73 @@ def cleanup_denoised(temp_path: Path) -> None:
     except OSError as e:
         logger.warning(
             "cleanup denoised temp file failed: %s (%s)", temp_path, e
+        )
+
+
+def maybe_adjust_speed(
+    input_path: Path,
+    *,
+    playback_speed: float,
+) -> tuple[Path, bool]:
+    """若 playback_speed 不為 1.0，用 ffmpeg atempo 調速到 temp mp3、回 (新 path, True)。
+
+    speed ≈ 1.0（abs_tol=1e-3）視為 no-op，直接回 (input_path, False)。
+    Caller 必須在 job 結束後刪除 temp file（若 True）。
+
+    Raises AppError(INTERNAL_ERROR) 若 playback_speed 超出 [0.5, 2.0] 範圍。
+    """
+    if math.isclose(playback_speed, 1.0, abs_tol=1e-3):
+        return input_path, False
+
+    if not (0.5 <= playback_speed <= 2.0):
+        raise AppError(
+            ErrorCode.INTERNAL_ERROR,
+            f"playback_speed {playback_speed} out of range [0.5, 2.0]",
+        )
+
+    settings = get_settings()
+    fd, temp_str = tempfile.mkstemp(
+        suffix=".mp3", prefix="speed_", dir=str(settings.upload_dir),
+    )
+    os.close(fd)
+    temp_path = Path(temp_str)
+
+    cmd = [
+        "ffmpeg", "-y", "-v", "error",
+        "-i", str(input_path),
+        "-filter:a", f"atempo={playback_speed}",
+        str(temp_path),
+    ]
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            timeout=600,
+        )
+    except subprocess.CalledProcessError as e:
+        temp_path.unlink(missing_ok=True)
+        stderr = e.stderr.decode("utf-8", errors="replace")[-500:] if e.stderr else ""
+        raise AppError(
+            ErrorCode.AUDIO_UNREADABLE,
+            f"ffmpeg atempo failed: {stderr}",
+        ) from e
+
+    logger.info(
+        "speed: adjusted %s → %s @ %s×",
+        input_path.name, temp_path.name, playback_speed,
+    )
+    return temp_path, True
+
+
+def cleanup_adjusted_speed(temp_path: Path) -> None:
+    """刪除 temp speed-adjusted file (safe — 失敗不 raise)。"""
+    try:
+        if temp_path.exists():
+            temp_path.unlink()
+    except OSError as e:
+        logger.warning(
+            "cleanup speed temp file failed: %s (%s)", temp_path, e
         )
 
 

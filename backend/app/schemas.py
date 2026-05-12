@@ -52,6 +52,7 @@ class ProjectIn(BaseModel):
     hotwords: list[str] = Field(default_factory=list)
     webhook_url: str | None = None
     denoise_enabled: bool = False
+    playback_speed: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
 class ProjectPatch(BaseModel):
@@ -60,6 +61,7 @@ class ProjectPatch(BaseModel):
     hotwords: list[str] | None = None
     webhook_url: str | None = None
     denoise_enabled: bool | None = None
+    playback_speed: float | None = Field(default=None, ge=0.5, le=2.0)
 
 
 class ProjectOut(BaseModel):
@@ -71,6 +73,7 @@ class ProjectOut(BaseModel):
     active_model_id: int | None
     webhook_url: str | None
     denoise_enabled: bool
+    playback_speed: float
     created_at: datetime
     updated_at: datetime
 
