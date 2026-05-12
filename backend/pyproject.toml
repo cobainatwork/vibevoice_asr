@@ -53,6 +53,9 @@ docker = "^7.0.0"
 structlog = "^24.1.0"
 prometheus-client = "^0.19.0"
 
+# Audio Denoiser (ONNX CPU runtime)
+onnxruntime = "^1.18.0"
+
 # Misc
 python-dotenv = "^1.0.0"
 yt-dlp = "^2026.4.30"
