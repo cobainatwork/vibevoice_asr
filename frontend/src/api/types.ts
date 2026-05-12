@@ -76,6 +76,7 @@ export interface JobOut {
   source_url: string | null;
   reference_subtitles: Segment[] | null;
   reference_subtitle_lang: string | null;
+  is_corrected: boolean;
 }
 
 export interface JobCreatedOut {

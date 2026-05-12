@@ -4,7 +4,13 @@ import type { JobCreatedOut, JobOut, Segment } from "./types";
 const ADMIN = "/api/admin";
 
 export const jobsApi = {
-  list: (opts: { project_id?: number; status?: string; limit?: number; offset?: number } = {}) =>
+  list: (opts: {
+    project_id?: number;
+    status?: string;
+    is_corrected?: boolean;
+    limit?: number;
+    offset?: number;
+  } = {}) =>
     api.get<JobOut[]>(`${ADMIN}/jobs`, { query: opts }),
   get: (id: string) => api.get<JobOut>(`${ADMIN}/jobs/${id}`),
   cancel: (id: string) => api.post<JobOut>(`${ADMIN}/jobs/${id}/cancel`),
@@ -26,4 +32,7 @@ export const jobsApi = {
 
   patchSegments: (id: string, segments: Segment[]) =>
     api.patch<JobOut>(`${ADMIN}/jobs/${id}/segments`, { segments }),
+
+  setCorrected: (id: string, value: boolean) =>
+    api.patch<JobOut>(`${ADMIN}/jobs/${id}`, { is_corrected: value }),
 };

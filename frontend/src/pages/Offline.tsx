@@ -76,6 +76,18 @@ export default function Offline() {
     } catch { /* toast in client */ }
   };
 
+  const onMarkCorrected = async (j: JobOut, value: boolean) => {
+    try {
+      await jobsApi.setCorrected(j.id, value);
+      // 樂觀更新 — UI 立即反映,不等下次 fetchJobs
+      setJobs((prev) =>
+        prev.map((x) => (x.id === j.id ? { ...x, is_corrected: value } : x)),
+      );
+    } catch {
+      // client.ts 已 toast
+    }
+  };
+
   if (!project) return <div className="p-6">載入中...</div>;
 
   return (
@@ -93,7 +105,7 @@ export default function Offline() {
       <UploadDropzone onFile={onUpload} onYoutubeUrl={onYoutubeUrl} />
 
       <h2 className="text-sm font-semibold text-slate-700 mt-6 mb-3">最近 Job（{jobs.length}）</h2>
-      <JobList jobs={jobs} projectId={projectId} onDelete={onDelete} />
+      <JobList jobs={jobs} projectId={projectId} onDelete={onDelete} onMarkCorrected={onMarkCorrected} />
     </div>
   );
 }

@@ -7,6 +7,7 @@ interface Props {
   jobs: JobOut[];
   projectId: number;
   onDelete?: (j: JobOut) => void;
+  onMarkCorrected?: (j: JobOut, value: boolean) => void;
 }
 
 function formatDuration(sec: number | null): string {
@@ -17,7 +18,7 @@ function formatDuration(sec: number | null): string {
   return `${m} 分 ${s} 秒`;
 }
 
-export function JobList({ jobs, projectId, onDelete }: Props) {
+export function JobList({ jobs, projectId, onDelete, onMarkCorrected }: Props) {
   if (jobs.length === 0) {
     return <div className="bg-white border border-slate-200 rounded-lg p-12 text-center text-slate-500">尚無 Job</div>;
   }
@@ -27,6 +28,7 @@ export function JobList({ jobs, projectId, onDelete }: Props) {
         <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500">
           <tr>
             <th className="px-4 py-2 text-left">狀態</th>
+            <th className="px-4 py-2 text-left">校正</th>
             <th className="px-4 py-2 text-left">時間</th>
             <th className="px-4 py-2 text-left">檔名</th>
             <th className="px-4 py-2 text-left">時長</th>
@@ -38,6 +40,22 @@ export function JobList({ jobs, projectId, onDelete }: Props) {
           {jobs.map((j) => (
             <tr key={j.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors duration-200">
               <td className="px-4 py-2"><JobStatusBadge status={j.status} /></td>
+              <td className="px-4 py-2">
+                <input
+                  type="checkbox"
+                  checked={j.is_corrected}
+                  disabled={j.status !== "done" || !onMarkCorrected}
+                  title={
+                    j.status !== "done"
+                      ? "需先完成轉錄"
+                      : j.is_corrected
+                      ? "取消標記校正完成"
+                      : "勾選後可在資料集「從歷史轉錄」匯入"
+                  }
+                  onChange={(e) => onMarkCorrected?.(j, e.target.checked)}
+                  className="cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                />
+              </td>
               <td className="px-4 py-2 text-slate-600 font-mono text-xs">{new Date(j.created_at).toLocaleTimeString("zh-TW")}</td>
               <td className="px-4 py-2 text-slate-900 truncate max-w-[16rem]">{j.filename}</td>
               <td className="px-4 py-2 text-slate-600">{formatDuration(j.duration_sec)}</td>

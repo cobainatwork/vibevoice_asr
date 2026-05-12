@@ -18,7 +18,7 @@ interface RequestOpts {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   formData?: FormData;
-  query?: Record<string, string | number | undefined>;
+  query?: Record<string, string | number | boolean | undefined>;
   signal?: AbortSignal;
   responseType?: "json" | "blob" | "text";
 }

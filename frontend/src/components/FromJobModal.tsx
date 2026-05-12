@@ -27,7 +27,7 @@ export function FromJobModal({ open, projectId, onClose, onCreated }: Props) {
     setNotes("");
     setLoading(true);
     jobsApi
-      .list({ project_id: projectId, status: "done" })
+      .list({ project_id: projectId, status: "done", is_corrected: true })
       .then(setJobs)
       .catch(() => setError("載入失敗"))
       .finally(() => setLoading(false));
@@ -62,7 +62,9 @@ export function FromJobModal({ open, projectId, onClose, onCreated }: Props) {
           {loading ? (
             <div className="text-sm text-slate-500">載入中...</div>
           ) : jobs.length === 0 ? (
-            <div className="text-sm text-slate-500">尚無已完成的 Job。</div>
+            <div className="text-sm text-slate-500">
+              尚無已校正完成的 Job。請先在「離線轉錄」頁勾選「校正」欄位。
+            </div>
           ) : (
             <ul className="space-y-1">
               {jobs.map((j) => (
