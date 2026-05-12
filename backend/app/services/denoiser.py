@@ -11,6 +11,7 @@ docs/superpowers/specs/2026-05-12-denoise-noisereduce-design.md §1.1。
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 import numpy as np
 
@@ -44,4 +45,5 @@ def denoise(waveform: np.ndarray, sr: int, model_name: str | None = None) -> np.
         sr=sr,
         stationary=False,
     )
-    return cleaned.astype(np.float32)
+    # noisereduce 無 type stub、reduce_noise 推為 Any;顯式 cast 對齊 mypy。
+    return cast(np.ndarray, cleaned.astype(np.float32))
