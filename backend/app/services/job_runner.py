@@ -29,6 +29,7 @@ from app.constants import guess_mime
 from app.db import db_session
 from app.errors import AppError, ErrorCode
 from app.models import Job, JobStatus, Project
+from app.services.audio_preprocessor import cleanup_denoised, maybe_denoise
 from app.services.audio_splitter import (
     Chunk,
     split_chunk_in_half,
@@ -130,6 +131,15 @@ async def run_transcribe(job_id: str) -> None:
     if state is None:
         return
 
+    # Audio preprocessing：denoise（若 project 啟用）
+    # job.audio_path DB 欄位不動；state["audio_path"] 只是執行期 in-memory、安全覆寫。
+    asr_audio_path, was_denoised = maybe_denoise(
+        Path(state["audio_path"]),
+        denoise_enabled=state["denoise_enabled"],
+        denoise_model=state["denoise_model"],
+    )
+    state["audio_path"] = str(asr_audio_path)
+
     try:
         outcome = await _do_transcribe(get_settings(), state)
         await _persist_success(job_id, state, outcome)
@@ -146,6 +156,9 @@ async def run_transcribe(job_id: str) -> None:
         await _mark_failed(job_id, f"{ErrorCode.INTERNAL_ERROR.value}: {e}")
         logger.exception("transcribe_job CRASHED id=%s", job_id)
         raise  # 讓 arq retry / DLQ 機制接手
+    finally:
+        if was_denoised:
+            cleanup_denoised(asr_audio_path)
 
 
 # === Stage helpers ===
@@ -164,6 +177,8 @@ async def _begin_running(job_id: str) -> dict[str, Any] | None:
             "audio_path": job.audio_path,
             "duration_initial": job.duration_sec,
             "hotwords": list(project.hotwords) if project else [],
+            "denoise_enabled": project.denoise_enabled if project else False,
+            "denoise_model": project.denoise_model if project else "gtcrn",
         }
         job.status = JobStatus.RUNNING
         job.started_at = datetime.utcnow()
