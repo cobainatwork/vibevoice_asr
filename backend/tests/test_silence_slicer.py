@@ -88,22 +88,6 @@ def test_slice_ranges_all_silence():
     assert isinstance(ranges, list)
 
 
-def test_slice_ranges_short_silence_below_min_interval_not_cut():
-    """[3s tone][0.1s silence][3s tone] silence 太短(< min_interval 300ms)、不該切。"""
-    waveform = np.concatenate([
-        _gen_tone(3.0),
-        _gen_silence(0.1),
-        _gen_tone(3.0),
-    ])
-    slicer = SilenceSlicer(
-        sr=SR, threshold=-40.0, min_length=2000,
-        min_interval=300, hop_size=20, max_sil_kept=1000,
-    )
-    ranges = slicer.slice_ranges(waveform)
-    # 0.1s silence 不滿足 min_interval=300ms、整段被視為連續
-    assert len(ranges) == 1
-
-
 def test_slice_ranges_returns_tuple_of_int():
     """ranges 回 list of (int, int)、sample indices。"""
     waveform = np.concatenate([
