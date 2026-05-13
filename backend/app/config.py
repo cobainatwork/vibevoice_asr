@@ -48,10 +48,11 @@ class Settings(BaseSettings):
 
     # === Audio ===
     max_audio_duration_sec: int = 14400
-    # 實測 vLLM 對 >60s 音檔容易陷入 repetition loop（理論上下文 65k 能吃到 55min
-    # 但生成穩定性實際只到 30-60s）。預設 60s threshold + 55s chunk。
-    # 長音檔被切成 N 段獨立推論再 merge。
-    auto_split_threshold_sec: int = 60
+    # 短於 30 分鐘整段直送 vLLM(vibevoice 64k context 足夠多數場景)、超過才 silence-based 切段。
+    # 客服 / 訪談多在 3-10 分鐘 → 整段送、context 完整、品質優先;
+    # 極長音檔(>30 min)仍有 chunk safety net 防 partial / repetition loop。
+    # 若實機發現特定長度容易 partial,可從 .env 個別調 AUTO_SPLIT_THRESHOLD_SEC。
+    auto_split_threshold_sec: int = 1800
     split_chunk_duration_sec: int = 55
     # === 已廢棄（silence-based 切點不需要 overlap）、保留欄位避免 .env 破 ===
     # split_overlap_sec 仍可在 .env 設、但 audio_splitter 不再讀。
