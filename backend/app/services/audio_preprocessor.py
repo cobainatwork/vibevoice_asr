@@ -71,6 +71,88 @@ def cleanup_denoised(temp_path: Path) -> None:
         )
 
 
+def maybe_normalize_format(input_path: Path) -> tuple[Path, bool]:
+    """確保音檔是 16kHz mono mp3、否則 ffmpeg 強制轉。
+
+    vibevoice 訓練資料為 16kHz mono、直接送 8kHz 電話音檔(QC 場景常見)
+    會讓模型「幻想」內容(辨識結果跟原音完全無關)。
+    無論 audio 長短、ASR 推論前都跑這個 normalize stage。
+
+    回 (新 path, True) 若有轉、(原 path, False) 若已是 16kHz mono。
+    Caller 必須在 job 結束後刪除 temp file(若 True)。
+    """
+    sr, channels = _probe_audio_format(input_path)
+    target_sr = ASR_AUDIO_SAMPLE_RATE_HZ
+    target_ch = ASR_AUDIO_CHANNELS
+
+    if sr == target_sr and channels == target_ch:
+        return input_path, False
+
+    settings = get_settings()
+    fd, temp_str = tempfile.mkstemp(
+        suffix=".mp3", prefix="normalized_", dir=str(settings.upload_dir),
+    )
+    os.close(fd)
+    temp_path = Path(temp_str)
+
+    cmd = [
+        "ffmpeg", "-y", "-v", "error",
+        "-i", str(input_path),
+        "-vn",
+        "-ar", str(target_sr),
+        "-ac", str(target_ch),
+        "-c:a", "libmp3lame",
+        "-q:a", str(ASR_AUDIO_MP3_QUALITY),
+        str(temp_path),
+    ]
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, timeout=600)
+    except subprocess.CalledProcessError as e:
+        temp_path.unlink(missing_ok=True)
+        stderr = e.stderr.decode("utf-8", errors="replace")[-500:] if e.stderr else ""
+        raise AppError(
+            ErrorCode.AUDIO_UNREADABLE,
+            f"ffmpeg normalize failed: {stderr}",
+        ) from e
+
+    logger.info(
+        "format: normalized %s (%dHz/%dch → %dHz/%dch)",
+        input_path.name, sr, channels, target_sr, target_ch,
+    )
+    return temp_path, True
+
+
+def cleanup_normalized(temp_path: Path) -> None:
+    """刪除 temp normalized file (safe — 失敗不 raise)。"""
+    try:
+        if temp_path.exists():
+            temp_path.unlink()
+    except OSError as e:
+        logger.warning(
+            "cleanup normalized temp file failed: %s (%s)", temp_path, e
+        )
+
+
+def _probe_audio_format(input_path: Path) -> tuple[int, int]:
+    """ffprobe 拿 (sample_rate, channels)。"""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-select_streams", "a:0",
+        "-show_entries", "stream=sample_rate,channels",
+        "-of", "default=noprint_wrappers=1:nokey=0",
+        str(input_path),
+    ]
+    out = subprocess.check_output(cmd, timeout=30).decode("utf-8").strip()
+    sr = 0
+    ch = 0
+    for line in out.splitlines():
+        if line.startswith("sample_rate="):
+            sr = int(line.split("=", 1)[1])
+        elif line.startswith("channels="):
+            ch = int(line.split("=", 1)[1])
+    return sr, ch
+
+
 def maybe_adjust_speed(
     input_path: Path,
     *,

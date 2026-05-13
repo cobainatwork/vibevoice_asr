@@ -32,8 +32,10 @@ from app.models import Job, JobStatus, Project
 from app.services.audio_preprocessor import (
     cleanup_adjusted_speed,
     cleanup_denoised,
+    cleanup_normalized,
     maybe_adjust_speed,
     maybe_denoise,
+    maybe_normalize_format,
 )
 from app.services.audio_splitter import (
     Chunk,
@@ -136,15 +138,20 @@ async def run_transcribe(job_id: str) -> None:
     if state is None:
         return
 
-    # Audio preprocessing Stage 1：denoise（若 project 啟用）
-    # job.audio_path DB 欄位不動；state["audio_path"] 只是執行期 in-memory、安全覆寫。
+    # Audio preprocessing Stage 0:normalize format(必跑、確保 16kHz mono)
+    # vibevoice 訓練資料是 16kHz mono、QC 來的 8kHz 電話音檔不轉會 hallucinate。
+    # job.audio_path DB 欄位不動;state["audio_path"] 只是執行期 in-memory、安全覆寫。
+    normalized_path, was_normalized = maybe_normalize_format(Path(state["audio_path"]))
+    state["audio_path"] = str(normalized_path)
+
+    # Audio preprocessing Stage 1:denoise(若 project 啟用)
     asr_audio_path, was_denoised = maybe_denoise(
         Path(state["audio_path"]),
         denoise_enabled=state["denoise_enabled"],
     )
     state["audio_path"] = str(asr_audio_path)
 
-    # Audio preprocessing Stage 2：maybe adjust speed（若 playback_speed != 1.0）
+    # Audio preprocessing Stage 2:maybe adjust speed(若 playback_speed != 1.0)
     speed_adjusted_path, was_speed_adjusted = maybe_adjust_speed(
         Path(state["audio_path"]),
         playback_speed=state["playback_speed"],
@@ -176,6 +183,8 @@ async def run_transcribe(job_id: str) -> None:
             cleanup_adjusted_speed(speed_adjusted_path)
         if was_denoised:
             cleanup_denoised(asr_audio_path)
+        if was_normalized:
+            cleanup_normalized(normalized_path)
 
 
 # === Segment helpers ===
